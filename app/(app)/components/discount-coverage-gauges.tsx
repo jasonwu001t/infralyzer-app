@@ -4,7 +4,7 @@
  */
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer } from "@/components/ui/chart"
 import { ResponsiveContainer, RadialBarChart, RadialBar } from "recharts"
 import { useAuth } from "@/lib/hooks/use-auth"
@@ -46,16 +46,17 @@ const DISCOUNT_COVERAGE_API_CONFIG = {
 }
 
 export default function DiscountCoverageGauges() {
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const { data: coverageData, isLoading, error } = useFilteredData(
     async (filters) => {
       if (!user) throw new Error("User not authenticated")
       return generateDiscountCoverageData(filters, user.id, user.role, user.organization)
     },
-    DISCOUNT_COVERAGE_API_CONFIG.relevantFilters
+    DISCOUNT_COVERAGE_API_CONFIG.relevantFilters,
+    [user?.id] // Add user dependency
   )
 
-  if (isLoading) return (
+  if (isLoading || authLoading || !isAuthenticated) return (
     <Card>
       <CardHeader>
         <CardTitle>Discount Coverage</CardTitle>

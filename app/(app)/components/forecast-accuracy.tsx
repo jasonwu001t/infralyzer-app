@@ -34,16 +34,17 @@ const FORECAST_ACCURACY_API_CONFIG = {
 }
 
 export default function ForecastAccuracy() {
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const { data: forecastData, isLoading, error } = useFilteredData(
     async (filters) => {
       if (!user) throw new Error("User not authenticated")
       return generateForecastAccuracyData(filters, user.id, user.role, user.organization)
     },
-    FORECAST_ACCURACY_API_CONFIG.relevantFilters
+    FORECAST_ACCURACY_API_CONFIG.relevantFilters,
+    [user?.id] // Add user dependency
   )
 
-  if (isLoading) return (
+  if (isLoading || authLoading || !isAuthenticated) return (
     <Card>
       <CardHeader>
         <CardTitle>Forecast Accuracy</CardTitle>

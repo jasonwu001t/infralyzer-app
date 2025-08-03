@@ -189,7 +189,7 @@ export default function SpendSummaryChart({
   title = "Month to Date Spend",
   description = "Daily spend compared to previous period, forecast, and budget."
 }: SpendSummaryChartProps) {
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const { filters, isLoading: filtersLoading } = useDashboardFilters()
   const [spendData, setSpendData] = useState<SpendSummaryData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -198,7 +198,7 @@ export default function SpendSummaryChart({
   // Fetch spend data based on filters
   useEffect(() => {
     const fetchSpendData = async () => {
-      if (!user || filtersLoading) return
+      if (!user || !isAuthenticated || filtersLoading || authLoading) return
 
       setIsLoading(true)
       setError(null)
@@ -223,7 +223,7 @@ export default function SpendSummaryChart({
     }
 
     fetchSpendData()
-  }, [filters, user, filtersLoading])
+  }, [filters, user, isAuthenticated, filtersLoading, authLoading])
 
   if (!spendData) {
     return (
@@ -233,7 +233,7 @@ export default function SpendSummaryChart({
           <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center h-64">
-          {isLoading ? (
+          {(isLoading || authLoading || !isAuthenticated) ? (
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span className="text-sm text-muted-foreground">Loading spend data...</span>

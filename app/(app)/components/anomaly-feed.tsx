@@ -71,13 +71,37 @@ const ANOMALY_FEED_API_CONFIG = {
 }
 
 export default function AnomalyFeed() {
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const { data: anomalyData, isLoading, error } = useFilteredData(
     async (filters) => {
       if (!user) throw new Error("User not authenticated")
       return generateAnomalyData(filters, user.id, user.role, user.organization)
     },
-    ANOMALY_FEED_API_CONFIG.relevantFilters
+    ANOMALY_FEED_API_CONFIG.relevantFilters,
+    [user?.id] // Add user dependency
+  )
+
+  // Don't fetch data until user is authenticated
+  if (isLoading || authLoading || !isAuthenticated) return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Recent Cost Anomalies</CardTitle>
+        <CardDescription>Loading anomaly detection...</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-start space-x-3">
+              <div className="h-2 w-2 animate-pulse rounded-full bg-muted mt-2"></div>
+              <div className="flex-1 space-y-1">
+                <div className="h-4 w-3/4 animate-pulse rounded bg-muted"></div>
+                <div className="h-3 w-1/2 animate-pulse rounded bg-muted"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   )
 
   if (isLoading) return (

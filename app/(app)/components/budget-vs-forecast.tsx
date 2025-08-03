@@ -44,13 +44,27 @@ const BUDGET_FORECAST_API_CONFIG = {
 }
 
 export default function BudgetVsForecast() {
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const { data: budgetData, isLoading, error } = useFilteredData(
     async (filters) => {
       if (!user) throw new Error("User not authenticated")
       return generateBudgetForecastData(filters, user.id, user.role, user.organization)
     },
-    BUDGET_FORECAST_API_CONFIG.relevantFilters
+    BUDGET_FORECAST_API_CONFIG.relevantFilters,
+    [user?.id] // Add user dependency to prevent premature fetching
+  )
+
+  // Don't fetch data until user is authenticated
+  if (isLoading || authLoading || !isAuthenticated) return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Budget vs. Forecast</CardTitle>
+        <CardDescription>Loading...</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[100px] w-full animate-pulse rounded bg-muted"></div>
+      </CardContent>
+    </Card>
   )
 
   if (isLoading) return (

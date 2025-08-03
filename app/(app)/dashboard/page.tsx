@@ -112,7 +112,7 @@ export default function Dashboard() {
           <KpiCard kpiId="mtd-spend" />
           <KpiCard kpiId="forecast" />
           <KpiCard kpiId="savings" />
-          {user.role === 'admin' && <KpiCard title="Budget Utilization" value="73.2%" trend="+1.4% vs target" icon="BarChart3" />}
+          {user.role === 'admin' && <KpiCard kpiId="budget-utilization" />}
         </div>
 
       {/* Section: Overview */}

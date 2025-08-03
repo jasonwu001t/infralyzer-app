@@ -56,13 +56,37 @@ const TOP_COST_BY_TAG_API_CONFIG = {
 }
 
 export default function TopCostByTag() {
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const { data: chartData, isLoading, error } = useFilteredData(
     async (filters) => {
       if (!user) throw new Error("User not authenticated")
       return generateTagCostData(filters, user.id, user.role, user.organization)
     },
-    TOP_COST_BY_TAG_API_CONFIG.relevantFilters
+    TOP_COST_BY_TAG_API_CONFIG.relevantFilters,
+    [user?.id] // Add user dependency
+  )
+
+  // Don't fetch data until user is authenticated
+  if (isLoading || authLoading || !isAuthenticated) return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Top Cost by Tag</CardTitle>
+        <CardDescription>Loading cost breakdown by tags...</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="h-4 w-4 animate-pulse rounded bg-muted"></div>
+                <div className="h-4 w-20 animate-pulse rounded bg-muted"></div>
+              </div>
+              <div className="h-4 w-16 animate-pulse rounded bg-muted"></div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   )
 
   if (isLoading) return (

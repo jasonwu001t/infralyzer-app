@@ -48,6 +48,28 @@ export default function LoginPage() {
           
           <LoginForm />
           
+          {/* Demo Credentials for Testing */}
+          <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-center">Demo Login Credentials</h3>
+            <div className="grid gap-2 text-xs">
+              <div className="flex justify-between p-2 bg-background rounded">
+                <span className="font-medium">Admin (Full Access):</span>
+                <span className="text-muted-foreground">admin@techcorp.com / admin123</span>
+              </div>
+              <div className="flex justify-between p-2 bg-background rounded">
+                <span className="font-medium">Analyst (Limited):</span>
+                <span className="text-muted-foreground">sarah.analyst@techcorp.com / analyst123</span>
+              </div>
+              <div className="flex justify-between p-2 bg-background rounded">
+                <span className="font-medium">Viewer (Read-Only):</span>
+                <span className="text-muted-foreground">mike.viewer@techcorp.com / viewer123</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground text-center">
+              👆 Click any credential to copy to clipboard
+            </p>
+          </div>
+          
           <div className="space-y-4 text-center">
             <p className="text-sm text-muted-foreground">
               Don't have an account?{" "}

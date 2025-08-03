@@ -9,13 +9,34 @@ import Header from "./components/header"
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const { isAuthenticated, isLoading, user } = useAuth()
+  const { isAuthenticated, isLoading, user, login } = useAuth()
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login')
+    const autoLoginInDev = async () => {
+      // Auto-login demo user in development for easier testing
+      if (process.env.NODE_ENV === 'development' && !isLoading && !isAuthenticated) {
+        try {
+          console.log('🔄 Auto-logging in demo admin user for development...')
+          const result = await login('admin@techcorp.com', 'admin123')
+          if (result.success) {
+            console.log('✅ Auto-login successful!')
+            return // Don't redirect, user is now logged in
+          } else {
+            console.log('❌ Auto-login failed, redirecting to login page')
+          }
+        } catch (error) {
+          console.error('Auto-login error:', error)
+        }
+      }
+      
+      // Fallback: redirect to login if still not authenticated
+      if (!isLoading && !isAuthenticated) {
+        router.push('/login')
+      }
     }
-  }, [isLoading, isAuthenticated, router])
+
+    autoLoginInDev()
+  }, [isLoading, isAuthenticated, router, login])
 
   if (isLoading) {
     return (

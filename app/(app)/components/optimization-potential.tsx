@@ -57,18 +57,18 @@ const OPTIMIZATION_POTENTIAL_API_CONFIG = {
 }
 
 export default function OptimizationPotential() {
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const { data: optimizationData, isLoading, error } = useFilteredData(
     async (filters) => {
       if (!user) throw new Error("User not authenticated")
       return generateOptimizationData(filters, user.id, user.role, user.organization)
     },
-    OPTIMIZATION_POTENTIAL_API_CONFIG.relevantFilters
+    OPTIMIZATION_POTENTIAL_API_CONFIG.relevantFilters,
+    [user?.id] // Add user dependency
   )
 
-  const totalPotential = optimizationData?.reduce((sum, item) => sum + item.potential, 0) || 0
-
-  if (isLoading) return (
+  // Don't fetch data until user is authenticated
+  if (isLoading || authLoading || !isAuthenticated) return (
     <Card>
       <CardHeader>
         <CardTitle>Optimization Potential</CardTitle>
@@ -87,6 +87,10 @@ export default function OptimizationPotential() {
       </CardContent>
     </Card>
   )
+
+  const totalPotential = optimizationData?.reduce((sum, item) => sum + item.potential, 0) || 0
+
+
 
   if (error) return (
     <Card>

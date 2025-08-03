@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { LucideIcon, DollarSign, TrendingUp, TrendingDown, CalendarDays, Loader2 } from 'lucide-react'
+import { LucideIcon, DollarSign, TrendingUp, TrendingDown, CalendarDays, Loader2, Percent, Shield, Target } from 'lucide-react'
 import { useDashboardFilters, DashboardFilters } from '@/lib/hooks/use-dashboard-filters'
 import { useAuth } from '@/lib/hooks/use-auth'
 
@@ -16,6 +16,9 @@ const iconMap: Record<string, LucideIcon> = {
   TrendingUp,
   TrendingDown,
   CalendarDays,
+  Percent,
+  Shield,
+  Target,
 }
 
 // Component-specific API data structure
@@ -29,7 +32,7 @@ export interface KpiData {
   changeType: 'increase' | 'decrease' | 'neutral'
   trend: string
   icon: string
-  category: 'cost' | 'usage' | 'efficiency' | 'savings'
+  category: 'cost' | 'usage' | 'efficiency' | 'savings' | 'coverage' | 'budget'
   metadata: {
     unit: 'currency' | 'percentage' | 'count'
     format: 'compact' | 'full'
@@ -109,6 +112,74 @@ const KPI_API_CONFIG = {
           format: 'compact',
           lastUpdated: new Date().toISOString()
         }
+      },
+      {
+        id: 'effective-rate',
+        title: 'Effective Rate',
+        value: 0.65,
+        displayValue: '65%',
+        previousValue: 0.72,
+        change: -9.7,
+        changeType: 'decrease' as const,
+        trend: '-9.7% of list cost (savings)',
+        icon: 'Percent',
+        category: 'efficiency' as const,
+        metadata: {
+          unit: 'percentage',
+          format: 'compact',
+          lastUpdated: new Date().toISOString()
+        }
+      },
+      {
+        id: 'total-savings',
+        title: 'Total Monthly Savings',
+        value: 325800 * baseMultiplier,
+        displayValue: `$${(325800 * baseMultiplier).toLocaleString()}`,
+        previousValue: 298400 * baseMultiplier,
+        change: 9.2,
+        changeType: 'increase' as const,
+        trend: '+9.2% from all discounts',
+        icon: 'TrendingDown',
+        category: 'savings' as const,
+        metadata: {
+          unit: 'currency',
+          format: 'compact',
+          lastUpdated: new Date().toISOString()
+        }
+      },
+      {
+        id: 'discount-coverage',
+        title: 'Discount Coverage',
+        value: 0.78,
+        displayValue: '78%',
+        previousValue: 0.71,
+        change: 9.9,
+        changeType: 'increase' as const,
+        trend: '+9.9% of workloads optimized',
+        icon: 'Shield',
+        category: 'coverage' as const,
+        metadata: {
+          unit: 'percentage',
+          format: 'compact',
+          lastUpdated: new Date().toISOString()
+        }
+      },
+      {
+        id: 'budget-utilization',
+        title: 'Budget Utilization',
+        value: 0.73,
+        displayValue: '73%',
+        previousValue: 0.68,
+        change: 7.4,
+        changeType: 'increase' as const,
+        trend: '+7.4% of monthly budget',
+        icon: 'Target',
+        category: 'budget' as const,
+        metadata: {
+          unit: 'percentage',
+          format: 'compact',
+          lastUpdated: new Date().toISOString()
+        }
       }
     ]
   }
@@ -133,7 +204,7 @@ export default function KpiCard({
   showTrend = true, 
   compact = false 
 }: KpiCardProps) {
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const { filters } = useDashboardFilters()
   const [kpiData, setKpiData] = useState<KpiData[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -142,7 +213,7 @@ export default function KpiCard({
   // Fetch KPI data based on filters
   useEffect(() => {
     const fetchKpiData = async () => {
-      if (!user) return
+      if (!user || !isAuthenticated || authLoading) return
 
       setIsLoading(true)
       setError(null)
@@ -170,7 +241,7 @@ export default function KpiCard({
     }
 
     fetchKpiData()
-  }, [filters, user])
+  }, [filters, user, isAuthenticated, authLoading])
 
   // Support backward compatibility with direct props
   if (titleOverride && valueOverride) {
@@ -203,7 +274,7 @@ export default function KpiCard({
     return (
       <Card className={compact ? 'h-24' : ''}>
         <CardContent className="flex items-center justify-center h-full">
-          {isLoading ? (
+          {(isLoading || authLoading || !isAuthenticated) ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <span className="text-sm text-muted-foreground">No data available</span>

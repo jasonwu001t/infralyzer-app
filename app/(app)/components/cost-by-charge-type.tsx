@@ -49,16 +49,17 @@ const COST_BY_CHARGE_TYPE_API_CONFIG = {
 }
 
 export default function CostByChargeType() {
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const { data: chartData, isLoading, error } = useFilteredData(
     async (filters) => {
       if (!user) throw new Error("User not authenticated")
       return generateChargeTypeData(filters, user.id, user.role, user.organization)
     },
-    COST_BY_CHARGE_TYPE_API_CONFIG.relevantFilters
+    COST_BY_CHARGE_TYPE_API_CONFIG.relevantFilters,
+    [user?.id] // Add user dependency
   )
 
-  if (isLoading) return (
+  if (isLoading || authLoading || !isAuthenticated) return (
     <Card>
       <CardHeader>
         <CardTitle>Cost by Charge Type</CardTitle>

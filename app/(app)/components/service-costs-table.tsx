@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { ChartContainer } from "@/components/ui/chart"
@@ -222,7 +222,7 @@ export default function ServiceCostsTable({
   compact = false,
   title = "Spend by Service"
 }: ServiceCostsTableProps) {
-  const { user } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   const { filters, isLoading: filtersLoading } = useDashboardFilters()
   const [tableData, setTableData] = useState<ServiceCostsTableData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -232,7 +232,7 @@ export default function ServiceCostsTable({
   // Fetch service costs data based on filters
   useEffect(() => {
     const fetchServiceData = async () => {
-      if (!user || filtersLoading) return
+      if (!user || !isAuthenticated || filtersLoading || authLoading) return
 
       setIsLoading(true)
       setError(null)
@@ -257,7 +257,7 @@ export default function ServiceCostsTable({
     }
 
     fetchServiceData()
-  }, [filters, user, filtersLoading])
+  }, [filters, user, isAuthenticated, filtersLoading, authLoading])
 
   // Filter services by search term
   const filteredServices = tableData?.services.filter(service =>
@@ -285,15 +285,18 @@ export default function ServiceCostsTable({
     return <Minus className="h-3 w-3 text-gray-500" />
   }
 
-  if (!tableData) {
+  if (!tableData || authLoading || !isAuthenticated) {
     return (
-      <Card>
+      <Card className={compact ? "h-96" : ""}>
         <CardHeader>
           <CardTitle>{title}</CardTitle>
+          <CardDescription>
+            {authLoading || !isAuthenticated ? "Loading service cost data..." : ""}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center h-32">
-            {isLoading ? (
+            {(isLoading || authLoading || !isAuthenticated) ? (
               <div className="flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm text-muted-foreground">Loading service costs...</span>
