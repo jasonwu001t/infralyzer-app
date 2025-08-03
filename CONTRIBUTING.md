@@ -32,17 +32,20 @@ Thank you for your interest in contributing to Infralyzer! We appreciate your he
 #### Setup Development Environment
 
 1. **Fork the repository**
+
    ```bash
    git clone https://github.com/YOUR_USERNAME/infralyzer-app.git
    cd infralyzer-app
    ```
 
 2. **Install dependencies**
+
    ```bash
    npm install
    ```
 
 3. **Create a feature branch**
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
@@ -65,25 +68,25 @@ Thank you for your interest in contributing to Infralyzer! We appreciate your he
 
 ```typescript
 // components/ui/example-component.tsx
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 interface ExampleComponentProps {
-  title: string
-  children?: React.ReactNode
-  className?: string
+  title: string;
+  children?: React.ReactNode;
+  className?: string;
 }
 
-export function ExampleComponent({ 
-  title, 
-  children, 
-  className 
+export function ExampleComponent({
+  title,
+  children,
+  className,
 }: ExampleComponentProps) {
   return (
     <div className={cn("base-styles", className)}>
       <h2 className="text-lg font-semibold">{title}</h2>
       {children}
     </div>
-  )
+  );
 }
 ```
 
@@ -91,17 +94,17 @@ export function ExampleComponent({
 
 ```typescript
 // app/api/example/route.ts
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
   try {
     // Handle GET request
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: "Internal Server Error" },
       { status: 500 }
-    )
+    );
   }
 }
 ```
@@ -148,6 +151,7 @@ npm run test:coverage
 
 1. **Push your branch** to your fork
 2. **Create a pull request** with:
+
    - Clear title and description
    - Reference related issues
    - Screenshots for UI changes
@@ -160,23 +164,28 @@ npm run test:coverage
 
 ```markdown
 ## Description
+
 Brief description of changes made.
 
 ## Type of Change
+
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Breaking change
 - [ ] Documentation update
 
 ## Testing
+
 - [ ] Tests pass locally
 - [ ] Added new tests for changes
 - [ ] Manual testing completed
 
 ## Screenshots
+
 Include screenshots for UI changes.
 
 ## Checklist
+
 - [ ] Code follows style guidelines
 - [ ] Self-review completed
 - [ ] Documentation updated
