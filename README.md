@@ -1,12 +1,12 @@
 # Infralyzer - AI-Powered Cloud Cost Management Platform
 
 [![GitHub license](https://img.shields.io/github/license/jasonwu001t/infralyzer-app)](https://github.com/jasonwu001t/infralyzer-app/blob/main/LICENSE)
-[![Next.js](https://img.shields.io/badge/Next.js-19-black)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15.2.4-black)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-blue)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-3-blue)](https://tailwindcss.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-3.4.17-blue)](https://tailwindcss.com/)
 
-A comprehensive **FinOps** (Financial Operations) platform that empowers organizations to optimize their cloud costs through AI-powered insights, advanced analytics, and intelligent automation.
+A comprehensive **FinOps** (Financial Operations) platform that empowers organizations to optimize their cloud costs through AI-powered insights, advanced analytics, and intelligent automation. Built with modern React patterns and component-based architecture for scalability and maintainability.
 
 ![Infralyzer Dashboard](https://via.placeholder.com/800x400/0070f3/ffffff?text=Infralyzer+Dashboard)
 
@@ -35,10 +35,11 @@ A comprehensive **FinOps** (Financial Operations) platform that empowers organiz
 
 ### 🔍 SQL Lab & Query Builder
 
-- **Interactive SQL editor** with syntax highlighting
+- **Interactive SQL editor** with syntax highlighting and validation
 - **AI-powered query generation** for AWS Cost and Usage Reports
 - **Pre-built templates** for common cost analysis scenarios
 - **Query history** and result export capabilities
+- **Modular component architecture** with separate AI assistant, templates, and results components
 
 ### 📈 Instance Rate Card
 
@@ -58,9 +59,10 @@ A comprehensive **FinOps** (Financial Operations) platform that empowers organiz
 
 ### Prerequisites
 
-- **Node.js** 18+
-- **npm** or **pnpm**
+- **Node.js** 18+ (tested with v24.5.0)
+- **npm** 7+ (tested with v11.5.1)
 - **Git**
+- Modern web browser with JavaScript enabled
 
 ### Installation
 
@@ -103,11 +105,12 @@ A comprehensive **FinOps** (Financial Operations) platform that empowers organiz
 
 ### Frontend Stack
 
-- **Framework**: Next.js 19 with App Router
-- **UI Library**: React 19 with TypeScript
-- **Styling**: Tailwind CSS + shadcn/ui components
-- **State Management**: React hooks and context
+- **Framework**: Next.js 15.2.4 with App Router
+- **UI Library**: React 19 with TypeScript 5
+- **Styling**: Tailwind CSS 3.4.17 + shadcn/ui components
+- **State Management**: React hooks, context API, and component-based data fetching
 - **Charts**: Recharts for data visualization
+- **Component Architecture**: Modular, reusable components with API patterns
 
 ### Backend Integration
 
@@ -121,14 +124,40 @@ A comprehensive **FinOps** (Financial Operations) platform that empowers organiz
 ```
 app/
 ├── (app)/                    # Protected app routes
-│   ├── dashboard/           # Main dashboard
-│   ├── cost-analytics/      # Advanced cost analysis
-│   ├── sql-lab/            # Query builder and SQL editor
-│   ├── instance-rate-card/ # AWS pricing comparison
-│   └── capacity/           # Capacity management
-├── api/                     # API routes
-└── components/             # Reusable UI components
+│   ├── dashboard/           # Main dashboard with comprehensive KPIs
+│   ├── cost-analytics/      # Advanced cost analysis and breakdown
+│   ├── sql-lab/            # Modular SQL editor with AI assistant
+│   ├── instance-rate-card/ # AWS pricing comparison (public)
+│   ├── capacity/           # Cloud capacity management
+│   ├── ai-insights/        # AI-powered cost intelligence
+│   ├── optimization/       # Cost optimization recommendations
+│   ├── allocation/         # Cost allocation and chargeback
+│   ├── discounts/          # Savings plans and RI management
+│   └── components/         # Shared UI components with API patterns
+├── api/                     # API routes (primarily AWS pricing)
+├── lib/                     # Utilities, hooks, and type definitions
+│   ├── hooks/              # Custom React hooks
+│   ├── auth/               # Authentication and user management
+│   └── types/              # TypeScript interfaces
+└── components/             # shadcn/ui components
 ```
+
+### Component Architecture
+
+The application follows a **component-based architecture** with smart data fetching patterns:
+
+- **Modular Components**: Each feature is built as reusable components with clear responsibilities
+- **API Patterns**: Components manage their own data fetching with user-aware demo data
+- **Filter Management**: Smart filter system using React Context for cross-component state
+- **Type Safety**: Full TypeScript coverage with proper interfaces and type definitions
+- **Performance**: Optimized with caching, loading states, and smart re-rendering
+
+#### Key Components
+
+- **SQL Lab Modules**: `sql-ai-assistant.tsx`, `sql-templates.tsx`, `sql-query-editor.tsx`, `sql-query-results.tsx`, `sql-query-history.tsx`
+- **Dashboard Components**: `kpi-card.tsx`, `spend-summary-chart.tsx`, `service-costs-table.tsx`, `account-costs-table.tsx`
+- **Analytics Components**: `anomaly-feed.tsx`, `optimization-potential.tsx`, `forecast-accuracy.tsx`, `commitment-expirations.tsx`
+- **Shared Components**: `dashboard-filters.tsx`, `ai-insights-modal.tsx`, and 30+ other specialized components
 
 ## 🔧 Configuration
 
@@ -169,10 +198,11 @@ NEXT_PUBLIC_ENABLE_DEMO_MODE=true
 
 ### 3. SQL Lab
 
-- Build custom queries for cost data analysis
-- Use AI assistant for query generation
-- Access pre-built templates
-- Save and export query results
+- **Interactive SQL Editor**: Write and execute queries with syntax validation
+- **AI Assistant**: Generate queries using natural language prompts
+- **Quick Templates**: Access pre-built queries for common cost analysis scenarios
+- **Query History**: Track and reuse previous queries
+- **Export Results**: Save and download query results as CSV
 
 ### 4. Instance Rate Card
 
@@ -223,12 +253,45 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🎯 Roadmap
 
+### ✅ Recently Completed
+
+- [x] Component-based architecture with API patterns
+- [x] Modular SQL Lab with AI assistant
+- [x] User authentication and role-based access
+- [x] Advanced dashboard with filtering system
+- [x] AWS pricing comparison tool
+- [x] Comprehensive cost analytics pages
+
+### 🔄 In Progress
+
+- [ ] Enhanced error handling and performance optimization
+- [ ] Additional pre-built SQL templates
+- [ ] More sophisticated AI query generation
+
+### 📋 Planned Features
+
 - [ ] Multi-cloud support (Azure, GCP)
+- [ ] Real-time data streaming integration
 - [ ] Advanced ML models for cost prediction
-- [ ] Real-time streaming data integration
-- [ ] Mobile application
+- [ ] Mobile responsive improvements
 - [ ] Enterprise SSO integration
-- [ ] Advanced role-based access control
+- [ ] API documentation and developer tools
+
+## 📊 Current Status
+
+- **Build Status**: ✅ Successfully building and deploying
+- **Code Quality**: ✅ TypeScript, ESLint configured
+- **Test Coverage**: 🔄 In development
+- **Performance**: ✅ Optimized bundle sizes and loading states
+- **Documentation**: ✅ Component architecture documented
+
+### Recent Updates
+
+- **v1.0.0**: Complete architectural refactor with component-based API patterns
+- **SQL Lab**: Modular component architecture (740 → 150 lines)
+- **Type Safety**: Enhanced TypeScript coverage and proper typing
+- **Performance**: Optimized data fetching and smart re-rendering
+- **UX**: Improved loading states, error handling, and user feedback
 
 ---
 

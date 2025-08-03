@@ -1,3 +1,7 @@
+/**
+ * Used by: dashboard, capacity
+ * Purpose: Area chart tracking storage growth trends and capacity planning insights
+ */
 "use client"
 
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts"

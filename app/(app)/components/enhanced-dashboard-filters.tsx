@@ -30,18 +30,8 @@ import {
 import { useToast } from "@/components/ui/use-toast"
 import { generateShareLink, type DashboardFilterState } from "@/app/lib/actions"
 
-interface EnhancedDashboardFilterState extends DashboardFilterState {
-  accounts?: string[]
-  services?: string[]
-  regions?: string[]
-  tags?: { [key: string]: string[] }
-  costThreshold?: { min?: number; max?: number }
-  comparisonMode?: boolean
-  comparisonPeriod?: {
-    primary: string
-    secondary: string
-  }
-}
+// Use the DashboardFilterState directly since it now includes all fields
+type EnhancedDashboardFilterState = DashboardFilterState
 
 export default function EnhancedDashboardFilters({ initialFilters }: { initialFilters?: EnhancedDashboardFilterState }) {
   const [filters, setFilters] = useState<EnhancedDashboardFilterState>(

@@ -1,3 +1,7 @@
+/**
+ * Used by: dashboard
+ * Purpose: Stacked bar chart showing daily spend breakdown by service categories
+ */
 "use client"
 
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts"

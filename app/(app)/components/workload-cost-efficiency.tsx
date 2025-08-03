@@ -1,3 +1,7 @@
+/**
+ * Used by: dashboard, capacity, allocation
+ * Purpose: Shows cost efficiency metrics across different workloads and environments
+ */
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"

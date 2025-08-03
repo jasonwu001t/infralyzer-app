@@ -1,3 +1,7 @@
+/**
+ * Used by: dashboard, capacity, ai-insights
+ * Purpose: Analyzes unit costs and efficiency metrics for cost optimization insights
+ */
 "use client"
 
 import { Line, LineChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts"

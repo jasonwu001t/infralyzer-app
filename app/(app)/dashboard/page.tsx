@@ -1,3 +1,7 @@
+"use client"
+
+import { useAuth, useUserData } from "@/lib/hooks/use-auth"
+import { DashboardFilterProvider } from "@/lib/hooks/use-dashboard-filters"
 import KpiCard from "../components/kpi-card"
 import DashboardHeaderTools from "../components/dashboard-header-tools"
 import EnhancedDashboardFilters from "../components/enhanced-dashboard-filters"
@@ -32,31 +36,84 @@ import MultiCloudSpend from "../components/multi-cloud-spend"
 import ComputeEfficiencyMetric from "../components/compute-efficiency-metric"
 import AnomalyImpactWidget from "../components/anomaly-impact-widget"
 export default function Dashboard() {
-  const kpiData = [
-    { title: "Month-to-Date Spend", value: "$1,250,430", trend: "+2.5% vs last period", icon: "DollarSign" },
-    { title: "Forecasted Spend", value: "$2,450,800", trend: "+4.1% vs last month", icon: "TrendingUp" },
-    { title: "Previous Month Spend", value: "$2,354,210", trend: "Total for August", icon: "CalendarDays" },
-    { title: "Avg Daily Spend", value: "$81,693", trend: "-1.2% vs last period", icon: "TrendingDown" },
-  ]
+  const { user } = useAuth()
+  
+  // Generate user-specific KPI data based on user role and organization
+  const getUserKpiData = () => {
+    if (!user) return []
+    
+    // Different data based on user role and organization
+    const baseMultiplier = user.organization === 'StartupCo' ? 0.3 : 1 // Startup has smaller spend
+    const roleMultiplier = user.role === 'admin' ? 1 : user.role === 'analyst' ? 0.8 : 0.6
+    
+    const multiplier = baseMultiplier * roleMultiplier
+    
+    return [
+      { 
+        title: "Month-to-Date Spend", 
+        value: `$${(1250430 * multiplier).toLocaleString()}`, 
+        trend: user.role === 'admin' ? "+2.5% vs last period" : "+1.8% vs last period", 
+        icon: "DollarSign" 
+      },
+      { 
+        title: "Forecasted Spend", 
+        value: `$${(2450800 * multiplier).toLocaleString()}`, 
+        trend: user.organization === 'StartupCo' ? "+8.1% vs last month" : "+4.1% vs last month", 
+        icon: "TrendingUp" 
+      },
+      { 
+        title: "Previous Month Spend", 
+        value: `$${(2354210 * multiplier).toLocaleString()}`, 
+        trend: "Total for November", 
+        icon: "CalendarDays" 
+      },
+      { 
+        title: "Avg Daily Spend", 
+        value: `$${(81693 * multiplier).toLocaleString()}`, 
+        trend: user.role === 'admin' ? "-1.2% vs last period" : "-0.8% vs last period", 
+        icon: "TrendingDown" 
+      },
+    ]
+  }
+
+  const kpiData = getUserKpiData()
+
+  const getGreeting = () => {
+    const hour = new Date().getHours()
+    if (hour < 12) return "Good morning"
+    if (hour < 17) return "Good afternoon"
+    return "Good evening"
+  }
+
+  if (!user) return null
 
   return (
-    <div className="flex-1 space-y-6 p-8 pt-6">
-      <div className="flex flex-col justify-between space-y-2 md:flex-row md:items-center">
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-      </div>
+    <DashboardFilterProvider>
+      <div className="flex-1 space-y-6 p-8 pt-6">
+        <div className="flex flex-col justify-between space-y-2 md:flex-row md:items-center">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {getGreeting()}, {user.name.split(' ')[0]}! 👋
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Here's your {user.organization} cost overview for {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+        </div>
 
-      {/* Dashboard Header Tools - Compact AI & FinOps Access */}
-      <DashboardHeaderTools />
+        {/* Dashboard Header Tools - Compact AI & FinOps Access */}
+        <DashboardHeaderTools />
 
-      {/* Enhanced Dashboard Filters */}
-      <EnhancedDashboardFilters />
+        {/* Enhanced Dashboard Filters */}
+        <EnhancedDashboardFilters />
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {kpiData.map((kpi) => (
-          <KpiCard key={kpi.title} title={kpi.title} value={kpi.value} trend={kpi.trend} icon={kpi.icon} />
-        ))}
-      </div>
+        {/* KPI Cards - Now using component-based API */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <KpiCard kpiId="mtd-spend" />
+          <KpiCard kpiId="forecast" />
+          <KpiCard kpiId="savings" />
+          {user.role === 'admin' && <KpiCard title="Budget Utilization" value="73.2%" trend="+1.4% vs target" icon="BarChart3" />}
+        </div>
 
       {/* Section: Overview */}
       <div className="space-y-4 pt-6">
@@ -138,6 +195,7 @@ export default function Dashboard() {
           <AccountCostsTable />
         </div>
       </div>
-    </div>
+      </div>
+    </DashboardFilterProvider>
   )
 }

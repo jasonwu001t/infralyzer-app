@@ -1,6 +1,8 @@
 "use client"
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useAuth, useUserData } from "@/lib/hooks/use-auth"
+import { ChatMessage } from "@/lib/types/user"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -37,31 +39,68 @@ interface AIInsight {
   action?: string
 }
 
-interface ChatMessage {
-  id: string
-  type: 'user' | 'ai'
-  message: string
-  timestamp: Date
-  suggestions?: string[]
-}
+// ChatMessage interface imported from @/lib/types/user
 
 export default function AIInsightsModal() {
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: '1',
-      type: 'ai',
-      message: "Hi! I'm your AI cost analyst. I've analyzed your cloud spending and found some key insights. Ask me anything about your costs, optimization opportunities, or specific services!",
-      timestamp: new Date(),
-      suggestions: [
-        "Why did Lambda costs spike?",
-        "What can I optimize today?",
-        "Show me my biggest savings opportunity",
-        "How is my RI utilization?"
-      ]
-    }
-  ])
+  const { user } = useAuth()
+  const { getChatConversations, addChatConversation, updateChatConversation } = useUserData()
+  
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [currentMessage, setCurrentMessage] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+  const [currentConversationId, setCurrentConversationId] = useState<string>('')
+
+  // Load user's existing chat conversations
+  useEffect(() => {
+    if (user) {
+      const conversations = getChatConversations()
+      if (conversations.length > 0) {
+        // Load the most recent conversation
+        const latestConversation = conversations[0]
+        setChatMessages(latestConversation.messages)
+        setCurrentConversationId(latestConversation.id)
+      } else {
+        // Create initial greeting message personalized for user
+        const initialMessage: ChatMessage = {
+          id: '1',
+          type: 'assistant',
+          content: `Hi ${user.name.split(' ')[0]}! I'm your AI cost analyst for ${user.organization}. I've analyzed your cloud spending and found some key insights. Ask me anything about your costs, optimization opportunities, or specific services!`,
+          timestamp: new Date().toISOString(),
+          metadata: {
+            recommendations: user.role === 'admin' ? [
+              "Why did Lambda costs spike?",
+              "What can I optimize today?", 
+              "Show me my biggest savings opportunity",
+              "How is my RI utilization?"
+            ] : user.role === 'analyst' ? [
+              "Show me cost trends this month",
+              "Which services cost the most?",
+              "How can I reduce spending?",
+              "Compare this month vs last month"
+            ] : [
+              "What's my current spending?",
+              "Show me cost breakdown", 
+              "How are we tracking budget?",
+              "What services are we using?"
+            ]
+          }
+        }
+        setChatMessages([initialMessage])
+        
+        // Create new conversation
+        const newConversation = {
+          id: `conv_${Date.now()}`,
+          userId: user.id,
+          title: 'Cost Analysis Chat',
+          messages: [initialMessage],
+          createdAt: new Date().toISOString(),
+          lastUpdated: new Date().toISOString()
+        }
+        addChatConversation(newConversation)
+        setCurrentConversationId(newConversation.id)
+      }
+    }
+  }, [user, getChatConversations, addChatConversation])
 
   // Demo AI-generated insights
   const insights: AIInsight[] = [
@@ -97,8 +136,8 @@ export default function AIInsightsModal() {
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       type: 'user',
-      message: currentMessage,
-      timestamp: new Date()
+      content: currentMessage,
+      timestamp: new Date().toISOString()
     }
 
     setChatMessages(prev => [...prev, userMessage])
@@ -109,42 +148,53 @@ export default function AIInsightsModal() {
     setTimeout(() => {
       const aiResponses = {
         'lambda': {
-          message: "The Lambda cost spike is due to a new microservice deployment on Dec 15th. The 'user-analytics' function is processing 300% more events. I recommend implementing batching to reduce invocations by ~60% and save $1,900/month.",
-          suggestions: ["How to implement batching?", "Show Lambda optimization guide", "Compare with other functions"]
+          content: "The Lambda cost spike is due to a new microservice deployment on Dec 15th. The 'user-analytics' function is processing 300% more events. I recommend implementing batching to reduce invocations by ~60% and save $1,900/month.",
+          recommendations: ["How to implement batching?", "Show Lambda optimization guide", "Compare with other functions"]
         },
         'optimize': {
-          message: "Here are your top 3 immediate optimizations: 1) Rightsize 12 EC2 instances (save $2,340/month), 2) Purchase RIs for stable workloads (save $4,200/month), 3) Move S3 data to IA/Glacier (save $890/month). Total potential: $7,430/month.",
-          suggestions: ["Start with EC2 rightsizing", "Show RI recommendations", "Implement S3 lifecycle rules"]
+          content: "Here are your top 3 immediate optimizations: 1) Rightsize 12 EC2 instances (save $2,340/month), 2) Purchase RIs for stable workloads (save $4,200/month), 3) Move S3 data to IA/Glacier (save $890/month). Total potential: $7,430/month.",
+          recommendations: ["Start with EC2 rightsizing", "Show RI recommendations", "Implement S3 lifecycle rules"]
         },
         'savings': {
-          message: "Your biggest opportunity is Reserved Instance coverage. You have 67% RI coverage but could reach 85% on stable workloads. This would save $4,200/month with minimal risk. I can help you identify the exact instances to cover.",
-          suggestions: ["Show RI recommendations", "Calculate ROI", "Compare RI vs Savings Plans"]
+          content: "Your biggest opportunity is Reserved Instance coverage. You have 67% RI coverage but could reach 85% on stable workloads. This would save $4,200/month with minimal risk. I can help you identify the exact instances to cover.",
+          recommendations: ["Show RI recommendations", "Calculate ROI", "Compare RI vs Savings Plans"]
         },
         'ri': {
-          message: "Your RI utilization is excellent at 89%! You're effectively using your committed capacity. However, I notice you could increase coverage from 67% to 85% on your stable m5.large and c5.xlarge instances in us-east-1.",
-          suggestions: ["Show detailed RI report", "Recommend new RIs", "Monitor utilization trends"]
+          content: "Your RI utilization is excellent at 89%! You're effectively using your committed capacity. However, I notice you could increase coverage from 67% to 85% on your stable m5.large and c5.xlarge instances in us-east-1.",
+          recommendations: ["Show detailed RI report", "Recommend new RIs", "Monitor utilization trends"]
         }
       }
 
       const messageKey = Object.keys(aiResponses).find(key => 
-        userMessage.message.toLowerCase().includes(key)
+        userMessage.content.toLowerCase().includes(key)
       )
       
       const response = messageKey ? aiResponses[messageKey as keyof typeof aiResponses] : {
-        message: "I can help you analyze specific cost areas! Try asking about Lambda costs, optimization opportunities, RI utilization, or any specific AWS service. I have detailed insights on your entire cloud spending.",
-        suggestions: ["Analyze EC2 costs", "Check S3 spending", "Review data transfer costs", "Optimize database spend"]
+        content: "I can help you analyze specific cost areas! Try asking about Lambda costs, optimization opportunities, RI utilization, or any specific AWS service. I have detailed insights on your entire cloud spending.",
+        recommendations: ["Analyze EC2 costs", "Check S3 spending", "Review data transfer costs", "Optimize database spend"]
       }
 
       const aiMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        type: 'ai',
-        message: response.message,
-        timestamp: new Date(),
-        suggestions: response.suggestions
+        type: 'assistant',
+        content: response.content,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          recommendations: response.recommendations
+        }
       }
 
-      setChatMessages(prev => [...prev, aiMessage])
+      const updatedMessages = [...chatMessages, userMessage, aiMessage]
+      setChatMessages(updatedMessages)
       setIsTyping(false)
+      
+      // Save conversation to user data
+      if (currentConversationId && user) {
+        updateChatConversation(currentConversationId, {
+          messages: updatedMessages,
+          lastUpdated: new Date().toISOString()
+        })
+      }
     }, 1500)
   }
 
@@ -243,7 +293,7 @@ export default function AIInsightsModal() {
                         }
                       </div>
                       <span className="text-xs text-muted-foreground">
-                        {msg.timestamp.toLocaleTimeString()}
+                        {new Date(msg.timestamp).toLocaleTimeString()}
                       </span>
                     </div>
                     <div className={`p-4 rounded-lg ${
@@ -251,13 +301,13 @@ export default function AIInsightsModal() {
                         ? 'bg-blue-500 text-white ml-8' 
                         : 'bg-gray-100 text-gray-900 mr-8'
                     }`}>
-                      <p className="text-sm leading-relaxed">{msg.message}</p>
+                      <p className="text-sm leading-relaxed">{msg.content}</p>
                     </div>
-                    {msg.suggestions && (
+                    {msg.metadata?.recommendations && (
                       <div className="mr-8 space-y-2">
                         <p className="text-xs text-muted-foreground font-medium">Suggested questions:</p>
                         <div className="flex flex-wrap gap-2">
-                          {msg.suggestions.map((suggestion, index) => (
+                          {msg.metadata.recommendations.map((suggestion, index) => (
                             <Button
                               key={index}
                               variant="outline"

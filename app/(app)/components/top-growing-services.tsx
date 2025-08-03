@@ -1,3 +1,7 @@
+/**
+ * Used by: dashboard, ai-insights, optimization
+ * Purpose: Shows services with the highest cost growth rates and change indicators
+ */
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"

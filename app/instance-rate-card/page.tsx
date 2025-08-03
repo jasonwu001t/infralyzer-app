@@ -121,7 +121,7 @@ export default function InstanceRateCardPage() {
   }, [selectedRegion, selectedOS])
 
   const filteredAndSortedData = useMemo(() => {
-    let filtered = pricingData.filter(item => {
+    const filtered = pricingData.filter(item => {
       const matchesSearch = item.instance_type.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesFamily = selectedFamily === 'all' || 
         item.metadata.instance_family === selectedFamily ||
@@ -132,16 +132,16 @@ export default function InstanceRateCardPage() {
 
     // Sort data
     filtered.sort((a, b) => {
-      let aValue: any
-      let bValue: any
+      let aValue: string | number | undefined
+      let bValue: string | number | undefined
 
       if (sortConfig.key.includes('.')) {
         const keys = sortConfig.key.split('.')
-        aValue = keys.reduce((obj, key) => obj?.[key], a)
-        bValue = keys.reduce((obj, key) => obj?.[key], b)
+        aValue = keys.reduce((obj: Record<string, unknown>, key: string) => obj?.[key] as Record<string, unknown>, a as Record<string, unknown>) as string | number | undefined
+        bValue = keys.reduce((obj: Record<string, unknown>, key: string) => obj?.[key] as Record<string, unknown>, b as Record<string, unknown>) as string | number | undefined
       } else {
-        aValue = (a as any)[sortConfig.key]
-        bValue = (b as any)[sortConfig.key]
+        aValue = (a as Record<string, string | number>)[sortConfig.key]
+        bValue = (b as Record<string, string | number>)[sortConfig.key]
       }
 
       if (typeof aValue === 'number' && typeof bValue === 'number') {

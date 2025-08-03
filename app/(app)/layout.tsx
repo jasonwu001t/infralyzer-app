@@ -1,44 +1,35 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/lib/hooks/use-auth"
 import Sidebar from "./components/sidebar"
 import Header from "./components/header"
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const { isAuthenticated, isLoading, user } = useAuth()
 
   useEffect(() => {
-    // Check if user is authenticated (simple localStorage check for demo)
-    const checkAuth = () => {
-      const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true'
-      if (!isLoggedIn) {
-        router.push('/login')
-      } else {
-        setIsAuthenticated(true)
-      }
-      setIsLoading(false)
+    if (!isLoading && !isAuthenticated) {
+      router.push('/login')
     }
-
-    checkAuth()
-  }, [router])
+  }, [isLoading, isAuthenticated, router])
 
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-muted-foreground">Loading...</p>
+          <p className="mt-2 text-muted-foreground">Authenticating...</p>
         </div>
       </div>
     )
   }
 
-  if (!isAuthenticated) {
-    return null // Router will redirect to login
+  if (!isAuthenticated || !user) {
+    return null // Don't render content if not authenticated (router will handle redirect)
   }
 
   return (

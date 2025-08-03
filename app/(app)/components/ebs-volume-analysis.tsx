@@ -1,3 +1,7 @@
+/**
+ * Used by: dashboard, capacity, optimization
+ * Purpose: Analysis of EBS volume utilization and cost optimization opportunities
+ */
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"

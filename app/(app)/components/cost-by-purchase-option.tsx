@@ -1,3 +1,7 @@
+/**
+ * Used by: dashboard, cost-analytics, discounts
+ * Purpose: Pie chart showing cost breakdown by purchase option (on-demand, reserved, spot)
+ */
 "use client"
 
 import { Pie, PieChart, ResponsiveContainer, Cell } from "recharts"

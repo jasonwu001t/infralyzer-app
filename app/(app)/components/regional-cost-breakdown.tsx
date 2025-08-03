@@ -1,3 +1,7 @@
+/**
+ * Used by: dashboard, cost-analytics, capacity, allocation
+ * Purpose: Shows cost distribution across AWS regions with progress indicators
+ */
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"

@@ -1,3 +1,7 @@
+/**
+ * Used by: dashboard, capacity
+ * Purpose: Pie chart showing EC2 costs broken down by instance types and usage patterns
+ */
 "use client"
 
 import { Pie, PieChart, ResponsiveContainer, Cell } from "recharts"

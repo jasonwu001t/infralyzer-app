@@ -1,3 +1,7 @@
+/**
+ * Used by: dashboard, capacity
+ * Purpose: Identifies high data transfer costs and regional hotspots for optimization
+ */
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"

@@ -1,11 +1,21 @@
+/**
+ * Used by: dashboard, cost-analytics, capacity, allocation, ai-insights, optimization, discounts
+ * Purpose: Filter controls for date range, granularity, cost type with share functionality
+ */
 "use client"
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { CalendarIcon, Share2, Loader2, Copy } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
-import { generateShareLink, type DashboardFilterState } from "@/app/lib/actions"
+import { useToast } from "@/lib/hooks/use-toast"
+// import { generateShareLink, type DashboardFilterState } from "@/app/lib/actions"
+
+interface DashboardFilterState {
+  dateRange: string
+  granularity: string
+  costType: string
+}
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function DashboardFilters({ initialFilters }: { initialFilters?: DashboardFilterState }) {
@@ -35,15 +45,17 @@ export default function DashboardFilters({ initialFilters }: { initialFilters?: 
     // Generate new share link and show card
     setIsSharing(true)
     setShareUrl(null)
-    const result = await generateShareLink(filters)
-    if (result.success && result.key) {
-      const url = `${window.location.origin}/dashboard/share/${result.key}`
+    
+    // Mock share link generation for demo
+    try {
+      const shareKey = btoa(JSON.stringify(filters)).slice(0, 8)
+      const url = `${window.location.origin}/dashboard?share=${shareKey}`
       setShareUrl(url)
       setShowShareCard(true)
-    } else {
+    } catch (error) {
       toast({
         title: "Error",
-        description: result.error || "Could not create share link.",
+        description: "Could not create share link.",
         variant: "destructive",
       })
     }
