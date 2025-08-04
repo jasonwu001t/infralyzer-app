@@ -8,7 +8,19 @@ import SqlTemplates from "../components/sql-templates"
 import SqlQueryHistory from "../components/sql-query-history"
 import SqlQueryEditor from "../components/sql-query-editor"
 import SqlQueryResults from "../components/sql-query-results"
-import type { QueryTemplate, SavedQuery, QueryResult, SavedResult } from "../components/sql-query-editor"
+import type { QueryTemplate, QueryResult } from "../components/sql-query-editor"
+import type { SavedResult } from "../components/sql-query-results"
+import type { SavedQuery as UserSavedQuery } from "@/lib/types/user"
+
+interface SavedQueryDisplay {
+  id: string
+  name: string
+  query: string
+  description: string
+  createdAt: string
+  lastRun: string
+  favorite: boolean
+}
 
 export default function SqlLabPage() {
   const { user, hasPermission } = useAuth()
@@ -17,7 +29,7 @@ export default function SqlLabPage() {
   const [currentQuery, setCurrentQuery] = useState('')
   const [queryResults, setQueryResults] = useState<QueryResult | null>(null)
   const [isExecuting, setIsExecuting] = useState(false)
-  const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([])
+  const [savedQueries, setSavedQueries] = useState<SavedQueryDisplay[]>([])
   const [savedResults, setSavedResults] = useState<SavedResult[]>([])
   const [queryHistory, setQueryHistory] = useState<string[]>([])
   
@@ -39,7 +51,7 @@ export default function SqlLabPage() {
         description: q.description || '',
         createdAt: q.createdAt || new Date().toISOString(),
         lastRun: q.lastExecuted || 'Never',
-        favorite: q.favorite || false
+        favorite: false // Convert from isPublic or add favorite functionality later
       })))
       
       setQueryHistory(userHistoryData.map(h => h.query).slice(0, 20))
@@ -98,18 +110,23 @@ export default function SqlLabPage() {
     }, 1500)
   }
 
-  const handleSaveQuery = (savedQuery: SavedQuery) => {
+  const handleSaveQuery = (savedQuery: SavedQueryDisplay) => {
     setSavedQueries(prev => [savedQuery, ...prev])
-    addSavedQuery({
+    
+    // Convert to UserSavedQuery format
+    const userSavedQuery: Omit<UserSavedQuery, 'userId'> = {
       id: savedQuery.id,
       name: savedQuery.name,
       query: savedQuery.query,
       description: savedQuery.description,
       tags: [],
+      isPublic: savedQuery.favorite, // Map favorite to isPublic for now
       createdAt: savedQuery.createdAt,
-      lastExecuted: savedQuery.lastRun,
-      favorite: savedQuery.favorite
-    })
+      lastExecuted: savedQuery.lastRun === 'Never' ? undefined : savedQuery.lastRun,
+      executionCount: 0
+    }
+    
+    addSavedQuery(userSavedQuery)
   }
 
   const handleSaveResult = (savedResult: SavedResult) => {

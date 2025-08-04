@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Play, Save, Loader2, Code2, Info } from 'lucide-react'
 
-interface SavedQuery {
+export interface SavedQuery {
   id: string
   name: string
   query: string
@@ -23,6 +23,24 @@ interface SavedQuery {
   lastRun: string
   favorite: boolean
 }
+
+export interface QueryTemplate {
+  id: string
+  name: string
+  description: string
+  query: string
+  category: string
+}
+
+export interface QueryResult {
+  headers: string[]
+  rows: any[][]
+  executionTime: number
+  rowCount: number
+  executedAt: string
+}
+
+
 
 interface SqlQueryEditorProps {
   query: string
@@ -42,6 +60,12 @@ export default function SqlQueryEditor({
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
   const [queryName, setQueryName] = useState('')
   const [queryDescription, setQueryDescription] = useState('')
+  
+  // Query parameters state
+  const [billingPeriodStart, setBillingPeriodStart] = useState('')
+  const [billingPeriodEnd, setBillingPeriodEnd] = useState('')
+  const [servicePeriodStart, setServicePeriodStart] = useState('')
+  const [servicePeriodEnd, setServicePeriodEnd] = useState('')
 
   const saveQuery = () => {
     if (!queryName.trim() || !query.trim() || !onSaveQuery) return
@@ -87,6 +111,59 @@ export default function SqlQueryEditor({
     onQueryChange('')
   }
 
+  const insertParameter = (paramType: string) => {
+    let paramValue = ''
+    let paramName = ''
+    
+    switch(paramType) {
+      case 'billing_start':
+        paramValue = billingPeriodStart ? `${billingPeriodStart}T00:00:00Z` : '2024-01-01T00:00:00Z'
+        paramName = 'billing_period_start'
+        break
+      case 'billing_end':
+        paramValue = billingPeriodEnd ? `${billingPeriodEnd}T23:59:59Z` : '2024-01-31T23:59:59Z'
+        paramName = 'billing_period_end'
+        break
+      case 'service_start':
+        paramValue = servicePeriodStart ? `${servicePeriodStart}T00:00:00Z` : '2024-01-01T00:00:00Z'
+        paramName = 'service_period_start'
+        break
+      case 'service_end':
+        paramValue = servicePeriodEnd ? `${servicePeriodEnd}T23:59:59Z` : '2024-01-31T23:59:59Z'
+        paramName = 'service_period_end'
+        break
+    }
+    
+    const insertion = `'${paramValue}' -- ${paramName}`
+    const newQuery = query + (query.trim() ? ' ' : '') + insertion
+    onQueryChange(newQuery)
+  }
+
+  const insertQuickFilter = (filterType: string) => {
+    let filterClause = ''
+    
+    switch(filterType) {
+      case 'date_range':
+        const start = billingPeriodStart ? `${billingPeriodStart}T00:00:00Z` : '2024-01-01T00:00:00Z'
+        const end = billingPeriodEnd ? `${billingPeriodEnd}T23:59:59Z` : '2024-01-31T23:59:59Z'
+        filterClause = `line_item_usage_start_date BETWEEN '${start}' AND '${end}'`
+        break
+      case 'ec2_only':
+        filterClause = `product_product_name = 'Amazon Elastic Compute Cloud - Compute'`
+        break
+      case 'rds_only':
+        filterClause = `product_product_name LIKE '%RDS%'`
+        break
+      case 'cost_threshold':
+        filterClause = `line_item_unblended_cost > 100`
+        break
+    }
+    
+    const whereClause = query.toUpperCase().includes('WHERE') ? ` AND ${filterClause}` : ` WHERE ${filterClause}`
+    const newQuery = query + whereClause
+    onQueryChange(newQuery)
+  }
+
 
 
   const validateQuery = () => {
@@ -98,10 +175,6 @@ export default function SqlQueryEditor({
     
     if (hasDangerous) {
       return { isValid: false, message: 'Destructive operations are not allowed in SQL Lab' }
-    }
-    
-    if (!upperQuery.startsWith('SELECT') && !upperQuery.startsWith('SHOW') && !upperQuery.startsWith('DESCRIBE')) {
-      return { isValid: false, message: 'Only SELECT, SHOW, and DESCRIBE queries are allowed' }
     }
     
     return { isValid: true, message: '' }
@@ -193,13 +266,134 @@ export default function SqlQueryEditor({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Query Parameters Section */}
+        <div className="border rounded-lg p-4 bg-muted/20">
+          <div className="flex items-center justify-between mb-3">
+            <Label className="text-sm font-medium">Query Parameters</Label>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => insertQuickFilter('date_range')}
+                disabled={!billingPeriodStart || !billingPeriodEnd}
+              >
+                Insert Date Filter
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => insertQuickFilter('ec2_only')}
+              >
+                EC2 Only
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => insertQuickFilter('cost_threshold')}
+              >
+                Cost > $100
+              </Button>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <Label htmlFor="billing-start" className="text-xs">Billing Period Start</Label>
+              <div className="flex gap-1">
+                <Input
+                  id="billing-start"
+                  type="date"
+                  value={billingPeriodStart}
+                  onChange={(e) => setBillingPeriodStart(e.target.value)}
+                  className="text-xs"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertParameter('billing_start')}
+                  className="px-2"
+                  title="Insert into query"
+                >
+                  +
+                </Button>
+              </div>
+            </div>
+            
+            <div>
+              <Label htmlFor="billing-end" className="text-xs">Billing Period End</Label>
+              <div className="flex gap-1">
+                <Input
+                  id="billing-end"
+                  type="date"
+                  value={billingPeriodEnd}
+                  onChange={(e) => setBillingPeriodEnd(e.target.value)}
+                  className="text-xs"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertParameter('billing_end')}
+                  className="px-2"
+                  title="Insert into query"
+                >
+                  +
+                </Button>
+              </div>
+            </div>
+            
+            <div>
+              <Label htmlFor="service-start" className="text-xs">Service Period Start</Label>
+              <div className="flex gap-1">
+                <Input
+                  id="service-start"
+                  type="date"
+                  value={servicePeriodStart}
+                  onChange={(e) => setServicePeriodStart(e.target.value)}
+                  className="text-xs"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertParameter('service_start')}
+                  className="px-2"
+                  title="Insert into query"
+                >
+                  +
+                </Button>
+              </div>
+            </div>
+            
+            <div>
+              <Label htmlFor="service-end" className="text-xs">Service Period End</Label>
+              <div className="flex gap-1">
+                <Input
+                  id="service-end"
+                  type="date"
+                  value={servicePeriodEnd}
+                  onChange={(e) => setServicePeriodEnd(e.target.value)}
+                  className="text-xs"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertParameter('service_end')}
+                  className="px-2"
+                  title="Insert into query"
+                >
+                  +
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div>
           <Label htmlFor="sql-editor">SQL Query</Label>
           <Textarea
             id="sql-editor"
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="SELECT * FROM aws_cost_usage_report WHERE..."
+            placeholder="SELECT * FROM aws_cost_usage_report WHERE line_item_usage_start_date >= '2024-01-01T00:00:00Z'..."
             className="font-mono text-sm min-h-[200px] resize-y"
           />
         </div>
@@ -214,7 +408,7 @@ export default function SqlQueryEditor({
         <div className="flex items-center justify-between">
           <div className="text-xs text-muted-foreground">
             <p>Available tables: <code>aws_cost_usage_report</code></p>
-            <p>Tip: Use LIMIT to avoid large result sets</p>
+            <p>Tip: Use LIMIT to avoid large result sets • Dates use ISO format: <code>2024-01-01T00:00:00Z</code></p>
           </div>
           
           <Button 
@@ -260,4 +454,4 @@ const SQL_QUERY_EDITOR_API_CONFIG = {
 }
 
 // Export API configuration for documentation
-export { SQL_QUERY_EDITOR_API_CONFIG, type SavedQuery }
+export { SQL_QUERY_EDITOR_API_CONFIG }
