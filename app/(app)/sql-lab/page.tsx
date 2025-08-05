@@ -62,8 +62,27 @@ export default function SqlLabPage() {
     if (!currentQuery.trim() || isExecuting) return
 
     setIsExecuting(true)
+    const startTime = Date.now()
     
-    setTimeout(() => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/finops/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: currentQuery,
+          engine: 'duckdb'
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      const executionTime = Date.now() - startTime
+
       // Add to history
       const historyItem = {
         id: `hist_${Date.now()}`,
@@ -71,43 +90,53 @@ export default function SqlLabPage() {
         query: currentQuery,
         status: 'success' as const,
         executedAt: new Date().toISOString(),
-        duration: Math.random() * 2000 + 500,
-        resultRows: 5
+        duration: executionTime,
+        resultRows: data.rows?.length || 0
       }
       
       setQueryHistory(prev => [currentQuery, ...prev.slice(0, 19)]) // Keep last 20
       addQueryHistory(historyItem)
-      
-      // Generate user-specific mock results based on role
-      const baseData = [
-        ['2024-01', 'Amazon EC2', 15420.50, 2580.5],
-        ['2024-01', 'Amazon RDS', 8750.00, 1450.0], 
-        ['2024-01', 'Amazon S3', 2340.80, 98765.2],
-        ['2023-12', 'Amazon EC2', 14890.30, 2456.8],
-        ['2023-12', 'Amazon RDS', 8234.50, 1398.2]
-      ]
-      
-      // Adjust data based on user organization and role
-      const userMultiplier = user?.organization === 'StartupCo' ? 0.3 : 1
-      const roleMultiplier = user?.role === 'admin' ? 1 : user?.role === 'analyst' ? 0.8 : 0.6
-      const multiplier = userMultiplier * roleMultiplier
-      
-      const mockResults: QueryResult = {
-        headers: ['month', 'service', 'cost', 'usage'],
-        rows: baseData.map(row => [
-          row[0], // month
-          row[1], // service
-          Number((row[2] as number) * multiplier), // cost
-          Number((row[3] as number) * multiplier)  // usage
-        ]),
-        executionTime: Math.random() * 2000 + 500,
-        rowCount: 5,
+
+      // Transform API response to match QueryResult interface
+      const results: QueryResult = {
+        headers: data.columns || data.headers || [],
+        rows: data.rows || data.data || [],
+        executionTime,
+        rowCount: data.rows?.length || data.data?.length || 0,
         executedAt: new Date().toISOString()
       }
       
-      setQueryResults(mockResults)
+      setQueryResults(results)
+    } catch (error) {
+      console.error('Query execution failed:', error)
+      
+      // Add failed execution to history
+      const historyItem = {
+        id: `hist_${Date.now()}`,
+        userId: user?.id || '',
+        query: currentQuery,
+        status: 'error' as const,
+        executedAt: new Date().toISOString(),
+        duration: Date.now() - startTime,
+        resultRows: 0
+      }
+      
+      setQueryHistory(prev => [currentQuery, ...prev.slice(0, 19)])
+      addQueryHistory(historyItem)
+
+      // Show error results
+      const errorResults: QueryResult = {
+        headers: ['Error'],
+        rows: [[error instanceof Error ? error.message : 'Unknown error occurred']],
+        executionTime: Date.now() - startTime,
+        rowCount: 0,
+        executedAt: new Date().toISOString()
+      }
+      
+      setQueryResults(errorResults)
+    } finally {
       setIsExecuting(false)
-    }, 1500)
+    }
   }
 
   const handleSaveQuery = (savedQuery: SavedQueryDisplay) => {
