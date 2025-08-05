@@ -82,6 +82,9 @@ export default function SqlLabPage() {
 
       const data = await response.json()
       const executionTime = Date.now() - startTime
+      
+      // Debug logging to understand API response structure
+      console.log('API Response:', data)
 
       // Add to history
       const historyItem = {
@@ -90,19 +93,78 @@ export default function SqlLabPage() {
         query: currentQuery,
         status: 'success' as const,
         executedAt: new Date().toISOString(),
-        duration: executionTime,
-        resultRows: data.rows?.length || 0
+        duration: data.execution_time_ms || executionTime,
+        resultRows: data.row_count || data.data?.length || 0
       }
       
       setQueryHistory(prev => [currentQuery, ...prev.slice(0, 19)]) // Keep last 20
       addQueryHistory(historyItem)
 
       // Transform API response to match QueryResult interface
+      let transformedRows: (string | number | null)[][] = []
+      let headers: string[] = []
+      
+      // Handle the specific API response format: { success, data, metadata, ... }
+      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+        // API returns { success: true, data: [...objects...], metadata: {...} }
+        const firstRow = data.data[0]
+        if (typeof firstRow === 'object') {
+          headers = Object.keys(firstRow)
+          transformedRows = data.data.map((row: any) => 
+            headers.map(header => {
+              const value = row[header]
+              // Handle nested objects by converting to JSON string
+              if (value !== null && typeof value === 'object') {
+                return JSON.stringify(value)
+              }
+              return value ?? null
+            })
+          )
+        }
+      } else if (data.columns && data.rows) {
+        // Fallback: Format { columns: [...], rows: [...] }
+        headers = data.columns
+        if (Array.isArray(data.rows) && data.rows.length > 0) {
+          if (Array.isArray(data.rows[0])) {
+            transformedRows = data.rows
+          } else if (typeof data.rows[0] === 'object') {
+            transformedRows = data.rows.map((row: any) => 
+              headers.map(header => row[header] ?? null)
+            )
+          }
+        }
+      } else if (data.headers && data.data) {
+        // Fallback: Format { headers: [...], data: [...] }
+        headers = data.headers
+        if (Array.isArray(data.data) && data.data.length > 0) {
+          if (Array.isArray(data.data[0])) {
+            transformedRows = data.data
+          } else if (typeof data.data[0] === 'object') {
+            transformedRows = data.data.map((row: any) => 
+              headers.map(header => row[header] ?? null)
+            )
+          }
+        }
+      } else if (Array.isArray(data) && data.length > 0) {
+        // Fallback: Direct array of objects
+        if (typeof data[0] === 'object') {
+          headers = Object.keys(data[0])
+          transformedRows = data.map((row: any) => 
+            headers.map(header => row[header] ?? null)
+          )
+        }
+      } else {
+        // Fallback: unknown data structure
+        console.warn('Unknown API response structure:', data)
+        headers = ['Result']
+        transformedRows = [[JSON.stringify(data)]]
+      }
+
       const results: QueryResult = {
-        headers: data.columns || data.headers || [],
-        rows: data.rows || data.data || [],
-        executionTime,
-        rowCount: data.rows?.length || data.data?.length || 0,
+        headers,
+        rows: transformedRows,
+        executionTime: data.execution_time_ms || executionTime,
+        rowCount: data.row_count || transformedRows.length,
         executedAt: new Date().toISOString()
       }
       
