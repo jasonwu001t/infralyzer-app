@@ -12,7 +12,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Play, Save, Loader2, Code2, Info } from 'lucide-react'
+import { Play, Save, Loader2, Code2, Info, AlignLeft, Trash2 } from 'lucide-react'
+import { Badge } from "@/components/ui/badge"
 
 export interface SavedQuery {
   id: string
@@ -183,113 +184,129 @@ export default function SqlQueryEditor({
   const validation = validateQuery()
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="h-fit">
+      <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-lg flex items-center gap-2">
-              <Code2 className="h-5 w-5" />
+              <Code2 className="h-5 w-5 text-green-600" />
               SQL Query Editor
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-sm">
               Write and execute SQL queries against AWS Cost and Usage Report data
             </CardDescription>
           </div>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={formatQuery}
-              disabled={!query.trim()}
-            >
-              Format
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={clearQuery}
-              disabled={!query.trim()}
-            >
-              Clear
-            </Button>
-            {onSaveQuery && (
-              <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    disabled={!query.trim()}
-                  >
-                    <Save className="h-4 w-4 mr-2" />
-                    Save
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Save Query</DialogTitle>
-                    <DialogDescription>
-                      Save this query for future use and easy access.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="query-name">Query Name</Label>
-                      <Input
-                        id="query-name"
-                        value={queryName}
-                        onChange={(e) => setQueryName(e.target.value)}
-                        placeholder="e.g., Monthly Cost by Service"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="query-description">Description (optional)</Label>
-                      <Input
-                        id="query-description"
-                        value={queryDescription}
-                        onChange={(e) => setQueryDescription(e.target.value)}
-                        placeholder="What does this query do?"
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="text-xs">
+              {validation.isValid ? 'Valid' : 'Invalid'}
+            </Badge>
+            <div className="flex gap-1">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={formatQuery}
+                disabled={!query.trim()}
+                className="h-8 px-3 text-xs"
+              >
+                <AlignLeft className="h-3 w-3 mr-1" />
+                Format
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={clearQuery}
+                disabled={!query.trim()}
+                className="h-8 px-3 text-xs"
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                Clear
+              </Button>
+              {onSaveQuery && (
+                <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+                  <DialogTrigger asChild>
                     <Button 
-                      onClick={saveQuery} 
-                      disabled={!queryName.trim() || !query.trim()}
+                      variant="ghost" 
+                      size="sm"
+                      disabled={!query.trim()}
+                      className="h-8 px-3 text-xs"
                     >
-                      Save Query
+                      <Save className="h-3 w-3 mr-1" />
+                      Save
                     </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Save Query</DialogTitle>
+                      <DialogDescription>
+                        Save this query for future use and easy access.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="query-name">Query Name</Label>
+                        <Input
+                          id="query-name"
+                          value={queryName}
+                          onChange={(e) => setQueryName(e.target.value)}
+                          placeholder="e.g., Monthly Cost by Service"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="query-description">Description (optional)</Label>
+                        <Input
+                          id="query-description"
+                          value={queryDescription}
+                          onChange={(e) => setQueryDescription(e.target.value)}
+                          placeholder="What does this query do?"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button 
+                        onClick={saveQuery} 
+                        disabled={!queryName.trim() || !query.trim()}
+                      >
+                        Save Query
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 p-6">
         {/* Query Parameters Section */}
-        <div className="border rounded-lg p-4 bg-muted/20">
-          <div className="flex items-center justify-between mb-3">
-            <Label className="text-sm font-medium">Query Parameters</Label>
-            <div className="flex gap-2">
+        <div className="border rounded-lg p-4 bg-muted/30">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Code2 className="h-4 w-4 text-muted-foreground" />
+              <Label className="text-sm font-medium">Query Parameters</Label>
+            </div>
+            <div className="flex gap-1">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={() => insertQuickFilter('date_range')}
                 disabled={!billingPeriodStart || !billingPeriodEnd}
+                className="h-7 px-3 text-xs"
               >
-                Insert Date Filter
+                Date Filter
               </Button>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={() => insertQuickFilter('ec2_only')}
+                className="h-7 px-3 text-xs"
               >
                 EC2 Only
               </Button>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={() => insertQuickFilter('cost_threshold')}
+                className="h-7 px-3 text-xs"
               >
                 Cost > $100
               </Button>
@@ -405,16 +422,23 @@ export default function SqlQueryEditor({
           </Alert>
         )}
 
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-muted-foreground">
-            <p>Available tables: <code>aws_cost_usage_report</code></p>
-            <p>Tip: Use LIMIT to avoid large result sets • Dates use ISO format: <code>2024-01-01T00:00:00Z</code></p>
+        <div className="flex items-center justify-between pt-2">
+          <div className="text-xs text-muted-foreground space-y-1">
+            <p className="flex items-center gap-1">
+              <span className="font-medium">Available tables:</span> 
+              <code className="bg-muted px-1 py-0.5 rounded text-xs">CUR</code>
+            </p>
+            <p className="flex items-center gap-1">
+              <span className="font-medium">Tips:</span> 
+              Use LIMIT for large datasets • Dates: <code className="bg-muted px-1 py-0.5 rounded text-xs">2024-01-01T00:00:00Z</code>
+            </p>
           </div>
           
           <Button 
             onClick={onExecute} 
             disabled={isExecuting || !query.trim() || !validation.isValid}
-            className="min-w-[100px]"
+            className="min-w-[120px] h-9"
+            size="sm"
           >
             {isExecuting ? (
               <>
@@ -424,23 +448,13 @@ export default function SqlQueryEditor({
             ) : (
               <>
                 <Play className="h-4 w-4 mr-2" />
-                Execute
+                Execute Query
               </>
             )}
           </Button>
         </div>
 
-        <div className="text-xs text-muted-foreground bg-muted p-3 rounded">
-          <p className="font-medium mb-1">Common AWS CUR Fields:</p>
-          <div className="grid grid-cols-2 gap-2">
-            <span><code>line_item_usage_start_date</code></span>
-            <span><code>product_product_name</code></span>
-            <span><code>line_item_unblended_cost</code></span>
-            <span><code>line_item_resource_id</code></span>
-            <span><code>product_instance_type</code></span>
-            <span><code>line_item_usage_amount</code></span>
-          </div>
-        </div>
+
       </CardContent>
     </Card>
   )

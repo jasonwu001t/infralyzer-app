@@ -18,6 +18,8 @@ A comprehensive **FinOps** (Financial Operations) platform that empowers organiz
 - **Smart recommendations** for immediate cost optimizations
 - **Predictive analytics** for future cost trends
 - **Automated anomaly detection** and alerting
+- **Natural Language SQL Generation** via AWS Bedrock integration
+- **Context-aware query suggestions** based on analysis type
 
 ### 📊 Comprehensive Dashboard
 
