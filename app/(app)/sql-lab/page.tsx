@@ -6,10 +6,11 @@ import { ViewerRestricted } from "@/lib/components/role-guard"
 import { apiUtils, ApiError } from "@/lib/api-config"
 import SqlQueryEditor from "../components/sql-query-editor"
 import SqlQueryResults from "../components/sql-query-results"
+import ExportManagement from "../components/export-management"
 import type { QueryTemplate, QueryResult } from "../components/sql-query-editor"
 import type { SavedResult } from "../components/sql-query-results"
 import type { SavedQuery as UserSavedQuery } from "@/lib/types/user"
-import { Search, ChevronDown, ChevronRight, Database, Table2, Coins, Tag, Receipt, User, Clock, Package, DollarSign, Shield, Archive, Zap, Split, Brain, BookOpen, Loader2, ArrowRight, Copy, Trash2, X } from "lucide-react"
+import { Search, ChevronDown, ChevronRight, Database, Table2, Coins, Tag, Receipt, User, Clock, Package, DollarSign, Shield, Archive, Zap, Split, Brain, BookOpen, Loader2, ArrowRight, Copy, Trash2, X, Check, Minus } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface SavedQueryDisplay {
   id: string
@@ -48,6 +50,26 @@ interface DatabaseSchema {
   }[]
 }
 
+interface JoinableTable {
+  id: string
+  name: string
+  displayName: string
+  description: string
+  icon: string
+  primaryKeys: string[]
+  joinKeys: JoinKey[]
+  sampleColumns: DatabaseColumn[]
+  dataSource: string
+  category: 'billing' | 'pricing' | 'usage' | 'governance'
+}
+
+interface JoinKey {
+  sourceColumn: string  // Column in CUR/FOCUS
+  targetColumn: string  // Column in joinable table
+  description: string
+  confidence: 'high' | 'medium' | 'low'
+}
+
 export default function SqlLabPage() {
   const { user, hasPermission } = useAuth()
   const { getSavedQueries, addSavedQuery, getQueryHistory, addQueryHistory } = useUserData()
@@ -76,6 +98,16 @@ export default function SqlLabPage() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [databaseSchema, setDatabaseSchema] = useState<DatabaseSchema | null>(null)
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set())
+  
+  // Data Source state
+  const [dataSource, setDataSource] = useState<'CUR' | 'FOCUS'>('CUR')
+  const [isLoadingSchema, setIsLoadingSchema] = useState(false)
+  
+  // Table Joining state
+  const [joinedTables, setJoinedTables] = useState<Set<string>>(new Set())
+  const [availableJoinTables, setAvailableJoinTables] = useState<JoinableTable[]>([])
+  const [showJoinPanel, setShowJoinPanel] = useState(false)
+  const [selectedJoinColumns, setSelectedJoinColumns] = useState<Map<string, Set<string>>>(new Map())
   
   // Resizable sidebar state
   const [sidebarWidth, setSidebarWidth] = useState(320) // Default width in pixels
@@ -108,7 +140,13 @@ export default function SqlLabPage() {
   // Load database schema and column groups
   useEffect(() => {
     loadDatabaseSchema()
-  }, [])
+    loadJoinableTables()
+  }, [dataSource])
+
+  // Update column groups when joined tables or selected columns change
+  useEffect(() => {
+    updateColumnGroupsWithJoinedTables()
+  }, [joinedTables, selectedJoinColumns, availableJoinTables])
 
   // Handle sidebar resizing
   useEffect(() => {
@@ -143,148 +181,151 @@ export default function SqlLabPage() {
     setIsResizing(true)
   }
 
-  const loadDatabaseSchema = () => {
-    // AWS CUR 2.0 schema
-    const schema: DatabaseSchema = {
-      tables: [{
-        name: 'COST_AND_USAGE_REPORT',
-        columns: [
-          { name: 'bill_bill_type', type: 'VARCHAR' },
-          { name: 'bill_billing_entity', type: 'VARCHAR' },
-          { name: 'bill_billing_period_end_date', type: 'TIMESTAMP' },
-          { name: 'bill_billing_period_start_date', type: 'TIMESTAMP' },
-          { name: 'bill_invoice_id', type: 'VARCHAR' },
-          { name: 'bill_invoicing_entity', type: 'VARCHAR' },
-          { name: 'bill_payer_account_id', type: 'VARCHAR' },
-          { name: 'bill_payer_account_name', type: 'VARCHAR' },
-          { name: 'cost_category', type: 'JSON' },
-          { name: 'discount', type: 'VARCHAR' },
-          { name: 'discount_bundled_discount', type: 'DECIMAL' },
-          { name: 'discount_total_discount', type: 'DECIMAL' },
-          { name: 'identity_line_item_id', type: 'VARCHAR' },
-          { name: 'identity_time_interval', type: 'TIMESTAMP' },
-          { name: 'line_item_availability_zone', type: 'VARCHAR' },
-          { name: 'line_item_blended_cost', type: 'DECIMAL' },
-          { name: 'line_item_blended_rate', type: 'DECIMAL' },
-          { name: 'line_item_currency_code', type: 'VARCHAR' },
-          { name: 'line_item_legal_entity', type: 'VARCHAR' },
-          { name: 'line_item_line_item_description', type: 'VARCHAR' },
-          { name: 'line_item_line_item_type', type: 'VARCHAR' },
-          { name: 'line_item_net_unblended_cost', type: 'DECIMAL' },
-          { name: 'line_item_net_unblended_rate', type: 'DECIMAL' },
-          { name: 'line_item_normalization_factor', type: 'VARCHAR' },
-          { name: 'line_item_normalized_usage_amount', type: 'DECIMAL' },
-          { name: 'line_item_operation', type: 'VARCHAR' },
-          { name: 'line_item_product_code', type: 'VARCHAR' },
-          { name: 'line_item_resource_id', type: 'VARCHAR' },
-          { name: 'line_item_tax_type', type: 'VARCHAR' },
-          { name: 'line_item_unblended_cost', type: 'DECIMAL' },
-          { name: 'line_item_unblended_rate', type: 'DECIMAL' },
-          { name: 'line_item_usage_account_id', type: 'VARCHAR' },
-          { name: 'line_item_usage_account_name', type: 'VARCHAR' },
-          { name: 'line_item_usage_amount', type: 'DECIMAL' },
-          { name: 'line_item_usage_end_date', type: 'TIMESTAMP' },
-          { name: 'line_item_usage_start_date', type: 'TIMESTAMP' },
-          { name: 'line_item_usage_type', type: 'VARCHAR' },
-          { name: 'pricing_currency', type: 'VARCHAR' },
-          { name: 'pricing_lease_contract_length', type: 'VARCHAR' },
-          { name: 'pricing_offering_class', type: 'VARCHAR' },
-          { name: 'pricing_public_on_demand_cost', type: 'DECIMAL' },
-          { name: 'pricing_public_on_demand_rate', type: 'DECIMAL' },
-          { name: 'pricing_purchase_option', type: 'VARCHAR' },
-          { name: 'pricing_rate_code', type: 'DECIMAL' },
-          { name: 'pricing_rate_id', type: 'DECIMAL' },
-          { name: 'pricing_term', type: 'VARCHAR' },
-          { name: 'pricing_unit', type: 'VARCHAR' },
-          { name: 'product', type: 'JSON' },
-          { name: 'product_comment', type: 'VARCHAR' },
-          { name: 'product_fee_code', type: 'DECIMAL' },
-          { name: 'product_fee_description', type: 'DECIMAL' },
-          { name: 'product_from_location', type: 'VARCHAR' },
-          { name: 'product_from_location_type', type: 'VARCHAR' },
-          { name: 'product_from_region_code', type: 'VARCHAR' },
-          { name: 'product_instance_family', type: 'VARCHAR' },
-          { name: 'product_instance_type', type: 'VARCHAR' },
-          { name: 'product_instancesku', type: 'VARCHAR' },
-          { name: 'product_location', type: 'VARCHAR' },
-          { name: 'product_location_type', type: 'VARCHAR' },
-          { name: 'product_operation', type: 'VARCHAR' },
-          { name: 'product_pricing_unit', type: 'VARCHAR' },
-          { name: 'product_product_family', type: 'VARCHAR' },
-          { name: 'product_region_code', type: 'VARCHAR' },
-          { name: 'product_servicecode', type: 'VARCHAR' },
-          { name: 'product_sku', type: 'VARCHAR' },
-          { name: 'product_to_location', type: 'VARCHAR' },
-          { name: 'product_to_location_type', type: 'VARCHAR' },
-          { name: 'product_to_region_code', type: 'VARCHAR' },
-          { name: 'product_usagetype', type: 'VARCHAR' },
-          { name: 'reservation_amortized_upfront_cost_for_usage', type: 'DECIMAL' },
-          { name: 'reservation_amortized_upfront_fee_for_billing_period', type: 'DECIMAL' },
-          { name: 'reservation_availability_zone', type: 'VARCHAR' },
-          { name: 'reservation_effective_cost', type: 'DECIMAL' },
-          { name: 'reservation_end_time', type: 'TIMESTAMP' },
-          { name: 'reservation_modification_status', type: 'VARCHAR' },
-          { name: 'reservation_net_amortized_upfront_cost_for_usage', type: 'DECIMAL' },
-          { name: 'reservation_net_amortized_upfront_fee_for_billing_period', type: 'DECIMAL' },
-          { name: 'reservation_net_effective_cost', type: 'DECIMAL' },
-          { name: 'reservation_net_recurring_fee_for_usage', type: 'DECIMAL' },
-          { name: 'reservation_net_unused_amortized_upfront_fee_for_billing_period', type: 'DECIMAL' },
-          { name: 'reservation_net_unused_recurring_fee', type: 'DECIMAL' },
-          { name: 'reservation_net_upfront_value', type: 'DECIMAL' },
-          { name: 'reservation_normalized_units_per_reservation', type: 'VARCHAR' },
-          { name: 'reservation_number_of_reservations', type: 'VARCHAR' },
-          { name: 'reservation_recurring_fee_for_usage', type: 'DECIMAL' },
-          { name: 'reservation_reservation_a_r_n', type: 'VARCHAR' },
-          { name: 'reservation_start_time', type: 'TIMESTAMP' },
-          { name: 'reservation_subscription_id', type: 'VARCHAR' },
-          { name: 'reservation_total_reserved_normalized_units', type: 'VARCHAR' },
-          { name: 'reservation_total_reserved_units', type: 'VARCHAR' },
-          { name: 'reservation_units_per_reservation', type: 'VARCHAR' },
-          { name: 'reservation_unused_amortized_upfront_fee_for_billing_period', type: 'DECIMAL' },
-          { name: 'reservation_unused_normalized_unit_quantity', type: 'VARCHAR' },
-          { name: 'reservation_unused_quantity', type: 'VARCHAR' },
-          { name: 'reservation_unused_recurring_fee', type: 'DECIMAL' },
-          { name: 'reservation_upfront_value', type: 'DECIMAL' },
-          { name: 'resource_tags', type: 'JSON' },
-          { name: 'savings_plan_amortized_upfront_commitment_for_billing_period', type: 'DECIMAL' },
-          { name: 'savings_plan_end_time', type: 'TIMESTAMP' },
-          { name: 'savings_plan_instance_type_family', type: 'VARCHAR' },
-          { name: 'savings_plan_net_amortized_upfront_commitment_for_billing_period', type: 'DECIMAL' },
-          { name: 'savings_plan_net_recurring_commitment_for_billing_period', type: 'DECIMAL' },
-          { name: 'savings_plan_net_savings_plan_effective_cost', type: 'DECIMAL' },
-          { name: 'savings_plan_offering_type', type: 'VARCHAR' },
-          { name: 'savings_plan_payment_option', type: 'VARCHAR' },
-          { name: 'savings_plan_purchase_term', type: 'VARCHAR' },
-          { name: 'savings_plan_recurring_commitment_for_billing_period', type: 'DECIMAL' },
-          { name: 'savings_plan_region', type: 'VARCHAR' },
-          { name: 'savings_plan_savings_plan_a_r_n', type: 'VARCHAR' },
-          { name: 'savings_plan_savings_plan_effective_cost', type: 'DECIMAL' },
-          { name: 'savings_plan_savings_plan_rate', type: 'DECIMAL' },
-          { name: 'savings_plan_start_time', type: 'TIMESTAMP' },
-          { name: 'savings_plan_total_commitment_to_date', type: 'TIMESTAMP' },
-          { name: 'savings_plan_used_commitment', type: 'VARCHAR' },
-          { name: 'split_line_item_actual_usage', type: 'VARCHAR' },
-          { name: 'split_line_item_net_split_cost', type: 'DECIMAL' },
-          { name: 'split_line_item_net_unused_cost', type: 'DECIMAL' },
-          { name: 'split_line_item_parent_resource_id', type: 'VARCHAR' },
-          { name: 'split_line_item_public_on_demand_split_cost', type: 'DECIMAL' },
-          { name: 'split_line_item_public_on_demand_unused_cost', type: 'DECIMAL' },
-          { name: 'split_line_item_reserved_usage', type: 'VARCHAR' },
-          { name: 'split_line_item_split_cost', type: 'DECIMAL' },
-          { name: 'split_line_item_split_usage', type: 'VARCHAR' },
-          { name: 'split_line_item_split_usage_ratio', type: 'VARCHAR' },
-          { name: 'split_line_item_unused_cost', type: 'DECIMAL' }
-        ]
-      }]
-    }
+  const loadDatabaseSchema = async () => {
+    setIsLoadingSchema(true)
+    
+    if (dataSource === 'CUR') {
+      // AWS CUR 2.0 schema
+      const schema: DatabaseSchema = {
+        tables: [{
+          name: 'COST_AND_USAGE_REPORT',
+          columns: [
+            { name: 'bill_bill_type', type: 'VARCHAR' },
+            { name: 'bill_billing_entity', type: 'VARCHAR' },
+            { name: 'bill_billing_period_end_date', type: 'TIMESTAMP' },
+            { name: 'bill_billing_period_start_date', type: 'TIMESTAMP' },
+            { name: 'bill_invoice_id', type: 'VARCHAR' },
+            { name: 'bill_invoicing_entity', type: 'VARCHAR' },
+            { name: 'bill_payer_account_id', type: 'VARCHAR' },
+            { name: 'bill_payer_account_name', type: 'VARCHAR' },
+            { name: 'cost_category', type: 'JSON' },
+            { name: 'discount', type: 'VARCHAR' },
+            { name: 'discount_bundled_discount', type: 'DECIMAL' },
+            { name: 'discount_total_discount', type: 'DECIMAL' },
+            { name: 'identity_line_item_id', type: 'VARCHAR' },
+            { name: 'identity_time_interval', type: 'TIMESTAMP' },
+            { name: 'line_item_availability_zone', type: 'VARCHAR' },
+            { name: 'line_item_blended_cost', type: 'DECIMAL' },
+            { name: 'line_item_blended_rate', type: 'DECIMAL' },
+            { name: 'line_item_currency_code', type: 'VARCHAR' },
+            { name: 'line_item_legal_entity', type: 'VARCHAR' },
+            { name: 'line_item_line_item_description', type: 'VARCHAR' },
+            { name: 'line_item_line_item_type', type: 'VARCHAR' },
+            { name: 'line_item_net_unblended_cost', type: 'DECIMAL' },
+            { name: 'line_item_net_unblended_rate', type: 'DECIMAL' },
+            { name: 'line_item_normalization_factor', type: 'VARCHAR' },
+            { name: 'line_item_normalized_usage_amount', type: 'DECIMAL' },
+            { name: 'line_item_operation', type: 'VARCHAR' },
+            { name: 'line_item_product_code', type: 'VARCHAR' },
+            { name: 'line_item_resource_id', type: 'VARCHAR' },
+            { name: 'line_item_tax_type', type: 'VARCHAR' },
+            { name: 'line_item_unblended_cost', type: 'DECIMAL' },
+            { name: 'line_item_unblended_rate', type: 'DECIMAL' },
+            { name: 'line_item_usage_account_id', type: 'VARCHAR' },
+            { name: 'line_item_usage_account_name', type: 'VARCHAR' },
+            { name: 'line_item_usage_amount', type: 'DECIMAL' },
+            { name: 'line_item_usage_end_date', type: 'TIMESTAMP' },
+            { name: 'line_item_usage_start_date', type: 'TIMESTAMP' },
+            { name: 'line_item_usage_type', type: 'VARCHAR' },
+            { name: 'pricing_currency', type: 'VARCHAR' },
+            { name: 'pricing_lease_contract_length', type: 'VARCHAR' },
+            { name: 'pricing_offering_class', type: 'VARCHAR' },
+            { name: 'pricing_public_on_demand_cost', type: 'DECIMAL' },
+            { name: 'pricing_public_on_demand_rate', type: 'DECIMAL' },
+            { name: 'pricing_purchase_option', type: 'VARCHAR' },
+            { name: 'pricing_rate_code', type: 'DECIMAL' },
+            { name: 'pricing_rate_id', type: 'DECIMAL' },
+            { name: 'pricing_term', type: 'VARCHAR' },
+            { name: 'pricing_unit', type: 'VARCHAR' },
+            { name: 'product', type: 'JSON' },
+            { name: 'product_comment', type: 'VARCHAR' },
+            { name: 'product_fee_code', type: 'DECIMAL' },
+            { name: 'product_fee_description', type: 'DECIMAL' },
+            { name: 'product_from_location', type: 'VARCHAR' },
+            { name: 'product_from_location_type', type: 'VARCHAR' },
+            { name: 'product_from_region_code', type: 'VARCHAR' },
+            { name: 'product_instance_family', type: 'VARCHAR' },
+            { name: 'product_instance_type', type: 'VARCHAR' },
+            { name: 'product_instancesku', type: 'VARCHAR' },
+            { name: 'product_location', type: 'VARCHAR' },
+            { name: 'product_location_type', type: 'VARCHAR' },
+            { name: 'product_operation', type: 'VARCHAR' },
+            { name: 'product_pricing_unit', type: 'VARCHAR' },
+            { name: 'product_product_family', type: 'VARCHAR' },
+            { name: 'product_region_code', type: 'VARCHAR' },
+            { name: 'product_servicecode', type: 'VARCHAR' },
+            { name: 'product_sku', type: 'VARCHAR' },
+            { name: 'product_to_location', type: 'VARCHAR' },
+            { name: 'product_to_location_type', type: 'VARCHAR' },
+            { name: 'product_to_region_code', type: 'VARCHAR' },
+            { name: 'product_usagetype', type: 'VARCHAR' },
+            { name: 'reservation_amortized_upfront_cost_for_usage', type: 'DECIMAL' },
+            { name: 'reservation_amortized_upfront_fee_for_billing_period', type: 'DECIMAL' },
+            { name: 'reservation_availability_zone', type: 'VARCHAR' },
+            { name: 'reservation_effective_cost', type: 'DECIMAL' },
+            { name: 'reservation_end_time', type: 'TIMESTAMP' },
+            { name: 'reservation_modification_status', type: 'VARCHAR' },
+            { name: 'reservation_net_amortized_upfront_cost_for_usage', type: 'DECIMAL' },
+            { name: 'reservation_net_amortized_upfront_fee_for_billing_period', type: 'DECIMAL' },
+            { name: 'reservation_net_effective_cost', type: 'DECIMAL' },
+            { name: 'reservation_net_recurring_fee_for_usage', type: 'DECIMAL' },
+            { name: 'reservation_net_unused_amortized_upfront_fee_for_billing_period', type: 'DECIMAL' },
+            { name: 'reservation_net_unused_recurring_fee', type: 'DECIMAL' },
+            { name: 'reservation_net_upfront_value', type: 'DECIMAL' },
+            { name: 'reservation_normalized_units_per_reservation', type: 'VARCHAR' },
+            { name: 'reservation_number_of_reservations', type: 'VARCHAR' },
+            { name: 'reservation_recurring_fee_for_usage', type: 'DECIMAL' },
+            { name: 'reservation_reservation_a_r_n', type: 'VARCHAR' },
+            { name: 'reservation_start_time', type: 'TIMESTAMP' },
+            { name: 'reservation_subscription_id', type: 'VARCHAR' },
+            { name: 'reservation_total_reserved_normalized_units', type: 'VARCHAR' },
+            { name: 'reservation_total_reserved_units', type: 'VARCHAR' },
+            { name: 'reservation_units_per_reservation', type: 'VARCHAR' },
+            { name: 'reservation_unused_amortized_upfront_fee_for_billing_period', type: 'DECIMAL' },
+            { name: 'reservation_unused_normalized_unit_quantity', type: 'VARCHAR' },
+            { name: 'reservation_unused_quantity', type: 'VARCHAR' },
+            { name: 'reservation_unused_recurring_fee', type: 'DECIMAL' },
+            { name: 'reservation_upfront_value', type: 'DECIMAL' },
+            { name: 'resource_tags', type: 'JSON' },
+            { name: 'savings_plan_amortized_upfront_commitment_for_billing_period', type: 'DECIMAL' },
+            { name: 'savings_plan_end_time', type: 'TIMESTAMP' },
+            { name: 'savings_plan_instance_type_family', type: 'VARCHAR' },
+            { name: 'savings_plan_net_amortized_upfront_commitment_for_billing_period', type: 'DECIMAL' },
+            { name: 'savings_plan_net_recurring_commitment_for_billing_period', type: 'DECIMAL' },
+            { name: 'savings_plan_net_savings_plan_effective_cost', type: 'DECIMAL' },
+            { name: 'savings_plan_offering_type', type: 'VARCHAR' },
+            { name: 'savings_plan_payment_option', type: 'VARCHAR' },
+            { name: 'savings_plan_purchase_term', type: 'VARCHAR' },
+            { name: 'savings_plan_recurring_commitment_for_billing_period', type: 'DECIMAL' },
+            { name: 'savings_plan_region', type: 'VARCHAR' },
+            { name: 'savings_plan_savings_plan_a_r_n', type: 'VARCHAR' },
+            { name: 'savings_plan_savings_plan_effective_cost', type: 'DECIMAL' },
+            { name: 'savings_plan_savings_plan_rate', type: 'DECIMAL' },
+            { name: 'savings_plan_start_time', type: 'TIMESTAMP' },
+            { name: 'savings_plan_total_commitment_to_date', type: 'TIMESTAMP' },
+            { name: 'savings_plan_used_commitment', type: 'VARCHAR' },
+            { name: 'split_line_item_actual_usage', type: 'VARCHAR' },
+            { name: 'split_line_item_net_split_cost', type: 'DECIMAL' },
+            { name: 'split_line_item_net_unused_cost', type: 'DECIMAL' },
+            { name: 'split_line_item_parent_resource_id', type: 'VARCHAR' },
+            { name: 'split_line_item_public_on_demand_split_cost', type: 'DECIMAL' },
+            { name: 'split_line_item_public_on_demand_unused_cost', type: 'DECIMAL' },
+            { name: 'split_line_item_reserved_usage', type: 'VARCHAR' },
+            { name: 'split_line_item_split_cost', type: 'DECIMAL' },
+            { name: 'split_line_item_split_usage', type: 'VARCHAR' },
+            { name: 'split_line_item_split_usage_ratio', type: 'VARCHAR' },
+            { name: 'split_line_item_unused_cost', type: 'DECIMAL' }
+          ]
+        }]
+      }
 
-    // Official AWS CUR 2.0 column groups
+      // Official AWS CUR 2.0 column groups
     const groups: ColumnGroup[] = [
       {
         name: 'Bill',
         color: 'text-blue-600',
         icon: Receipt,
-        description: '',
+          description: '',
         columns: [
           'bill_bill_type', 'bill_billing_entity', 'bill_billing_period_end_date', 
           'bill_billing_period_start_date', 'bill_invoice_id', 'bill_invoicing_entity', 
@@ -295,28 +336,28 @@ export default function SqlLabPage() {
         name: 'Cost Category',
         color: 'text-green-600',
         icon: Tag,
-        description: '',
+          description: '',
         columns: ['cost_category']
       },
       {
         name: 'Discount',
         color: 'text-yellow-600',
         icon: Coins,
-        description: '',
+          description: '',
         columns: ['discount', 'discount_bundled_discount', 'discount_total_discount']
       },
       {
         name: 'Identity',
         color: 'text-purple-600',
         icon: User,
-        description: '',
+          description: '',
         columns: ['identity_line_item_id', 'identity_time_interval']
       },
       {
         name: 'Line Item',
         color: 'text-red-600',
         icon: Table2,
-        description: '',
+          description: '',
         columns: [
           'line_item_availability_zone', 'line_item_blended_cost', 'line_item_blended_rate',
           'line_item_currency_code', 'line_item_legal_entity', 'line_item_line_item_description',
@@ -332,7 +373,7 @@ export default function SqlLabPage() {
         name: 'Pricing',
         color: 'text-orange-600',
         icon: DollarSign,
-        description: '',
+          description: '',
         columns: [
           'pricing_currency', 'pricing_lease_contract_length', 'pricing_offering_class',
           'pricing_public_on_demand_cost', 'pricing_public_on_demand_rate', 'pricing_purchase_option',
@@ -343,7 +384,7 @@ export default function SqlLabPage() {
         name: 'Product',
         color: 'text-cyan-600',
         icon: Package,
-        description: '',
+          description: '',
         columns: [
           'product', 'product_comment', 'product_fee_code', 'product_fee_description',
           'product_from_location', 'product_from_location_type', 'product_from_region_code',
@@ -358,7 +399,7 @@ export default function SqlLabPage() {
         name: 'Reservation',
         color: 'text-indigo-600',
         icon: Shield,
-        description: '',
+          description: '',
         columns: [
           'reservation_amortized_upfront_cost_for_usage', 'reservation_amortized_upfront_fee_for_billing_period',
           'reservation_availability_zone', 'reservation_effective_cost', 'reservation_end_time',
@@ -378,14 +419,14 @@ export default function SqlLabPage() {
         name: 'Resource Tags',
         color: 'text-pink-600',
         icon: Archive,
-        description: '',
+          description: '',
         columns: ['resource_tags']
       },
       {
         name: 'Savings Plan',
         color: 'text-emerald-600',
         icon: Zap,
-        description: '',
+          description: '',
         columns: [
           'savings_plan_amortized_upfront_commitment_for_billing_period', 'savings_plan_end_time',
           'savings_plan_instance_type_family', 'savings_plan_net_amortized_upfront_commitment_for_billing_period',
@@ -401,7 +442,7 @@ export default function SqlLabPage() {
         name: 'Split Line Item',
         color: 'text-violet-600',
         icon: Split,
-        description: '',
+          description: '',
         columns: [
           'split_line_item_actual_usage', 'split_line_item_net_split_cost', 'split_line_item_net_unused_cost',
           'split_line_item_parent_resource_id', 'split_line_item_public_on_demand_split_cost',
@@ -414,6 +455,247 @@ export default function SqlLabPage() {
 
     setDatabaseSchema(schema)
     setColumnGroups(groups)
+      setIsLoadingSchema(false)
+    } else if (dataSource === 'FOCUS') {
+      // Load FOCUS schema from backend
+      try {
+        console.log('Loading FOCUS schema from:', '/api/finops/schema/FOCUS')
+        const response = await fetch('/api/finops/schema/FOCUS')
+        
+        if (response.ok) {
+          const focusData = await response.json()
+          console.log('FOCUS schema loaded successfully:', focusData)
+          
+          // Convert FOCUS schema to our format
+          const focusSchema: DatabaseSchema = {
+            tables: [{
+              name: 'FOCUS',
+              columns: Object.entries(focusData.schema || {}).map(([name, type]) => ({
+                name,
+                type: type as string
+              }))
+            }]
+          }
+          
+          // Convert FOCUS column groups to our format
+          const focusGroups: ColumnGroup[] = (focusData.column_groups || []).map((group: any) => ({
+            name: group.name,
+            color: group.color,
+            icon: getIconComponent(group.icon),
+            description: group.description || '',
+            columns: group.columns
+          }))
+          
+          setDatabaseSchema(focusSchema)
+          setColumnGroups(focusGroups)
+        } else {
+          const errorText = await response.text()
+          console.error('Failed to load FOCUS schema:', response.status, errorText)
+          
+          // Show error message to user
+          alert(`Failed to load FOCUS schema: ${response.status} - ${errorText}`)
+          
+          // Fallback to empty schema
+          setDatabaseSchema({ tables: [{ name: 'FOCUS', columns: [] }] })
+          setColumnGroups([])
+        }
+      } catch (error) {
+        console.error('Error loading FOCUS schema:', error)
+        
+        // Show error message to user
+        alert(`Error loading FOCUS schema: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        
+        // Fallback to empty schema
+        setDatabaseSchema({ tables: [{ name: 'FOCUS', columns: [] }] })
+        setColumnGroups([])
+      } finally {
+        setIsLoadingSchema(false)
+      }
+    }
+  }
+  
+  // Load available joinable tables from backend
+  const loadJoinableTables = async () => {
+    try {
+      console.log('Loading joinable tables for:', dataSource)
+      const response = await fetch(`/api/finops/joins/available-tables/${dataSource}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Joinable tables loaded successfully:', data)
+        
+        if (data.success && data.available_tables) {
+          // Convert backend response to frontend format
+          const frontendTables: JoinableTable[] = data.available_tables.map((table: any) => ({
+            id: table.id,
+            name: table.name,
+            displayName: table.display_name,
+            description: table.description,
+            icon: table.icon,
+            primaryKeys: table.primary_keys,
+            joinKeys: table.join_keys.map((jk: any) => ({
+              sourceColumn: jk.source_column,
+              targetColumn: jk.target_column,
+              description: jk.description,
+              confidence: jk.confidence
+            })),
+            sampleColumns: table.sample_columns,
+            dataSource: table.data_source,
+            category: table.category
+          }))
+          
+          setAvailableJoinTables(frontendTables)
+        } else {
+          console.error('Invalid response format:', data)
+          setAvailableJoinTables([])
+        }
+      } else {
+        const errorText = await response.text()
+        console.error('Failed to load joinable tables:', response.status, errorText)
+        setAvailableJoinTables([])
+      }
+    } catch (error) {
+      console.error('Error loading joinable tables:', error)
+      setAvailableJoinTables([])
+    }
+  }
+
+  // Handle joining/unjoining tables
+  const toggleJoinTable = (tableId: string) => {
+    const newJoinedTables = new Set(joinedTables)
+    const newSelectedColumns = new Map(selectedJoinColumns)
+    
+    if (newJoinedTables.has(tableId)) {
+      // Remove table and its selected columns
+      newJoinedTables.delete(tableId)
+      newSelectedColumns.delete(tableId)
+    } else {
+      // Add table and select all columns by default
+      newJoinedTables.add(tableId)
+      const table = availableJoinTables.find(t => t.id === tableId)
+      if (table) {
+        const allColumns = new Set(table.sampleColumns.map(col => col.name))
+        newSelectedColumns.set(tableId, allColumns)
+      }
+    }
+    
+    setJoinedTables(newJoinedTables)
+    setSelectedJoinColumns(newSelectedColumns)
+  }
+
+  // Handle column selection for a specific table
+  const toggleJoinColumn = (tableId: string, columnName: string) => {
+    const newSelectedColumns = new Map(selectedJoinColumns)
+    const tableColumns = newSelectedColumns.get(tableId) || new Set()
+    const updatedColumns = new Set(tableColumns)
+    
+    if (updatedColumns.has(columnName)) {
+      updatedColumns.delete(columnName)
+    } else {
+      updatedColumns.add(columnName)
+    }
+    
+    newSelectedColumns.set(tableId, updatedColumns)
+    setSelectedJoinColumns(newSelectedColumns)
+  }
+
+  // Select/deselect all columns for a table
+  const toggleAllColumnsForTable = (tableId: string) => {
+    const table = availableJoinTables.find(t => t.id === tableId)
+    if (!table) return
+    
+    const newSelectedColumns = new Map(selectedJoinColumns)
+    const currentColumns = newSelectedColumns.get(tableId) || new Set()
+    const allColumns = new Set(table.sampleColumns.map(col => col.name))
+    
+    // If all columns are selected, deselect all; otherwise select all
+    const shouldSelectAll = currentColumns.size !== allColumns.size
+    newSelectedColumns.set(tableId, shouldSelectAll ? allColumns : new Set())
+    setSelectedJoinColumns(newSelectedColumns)
+  }
+
+  const getJoinedTableNames = () => {
+    return Array.from(joinedTables).map(id => {
+      const table = availableJoinTables.find(t => t.id === id)
+      const selectedCols = selectedJoinColumns.get(id)
+      const colCount = selectedCols ? selectedCols.size : 0
+      return table ? `${table.name}(${colCount} cols)` : id
+    }).join(', ')
+  }
+
+  // Get total number of new columns that will be added
+  const getTotalNewColumns = () => {
+    return Array.from(joinedTables).reduce((total, tableId) => {
+      const selectedCols = selectedJoinColumns.get(tableId)
+      return total + (selectedCols ? selectedCols.size : 0)
+    }, 0)
+  }
+
+  // Store original column groups to avoid infinite loop
+  const [originalColumnGroups, setOriginalColumnGroups] = useState<ColumnGroup[]>([])
+
+  // Update column groups to include joined table columns
+  const updateColumnGroupsWithJoinedTables = () => {
+    // Store original groups if not stored yet
+    if (originalColumnGroups.length === 0 && columnGroups.length > 0 && !columnGroups.some(g => g.name.startsWith('🔗'))) {
+      setOriginalColumnGroups(columnGroups)
+    }
+
+    // If no joined tables, restore original groups
+    if (joinedTables.size === 0) {
+      if (originalColumnGroups.length > 0) {
+        setColumnGroups(originalColumnGroups)
+      }
+      return
+    }
+
+    // Get base groups (original groups)
+    const baseGroups = originalColumnGroups.length > 0 
+      ? originalColumnGroups 
+      : columnGroups.filter(group => !group.name.startsWith('🔗'))
+
+    // Create joined table column groups
+    const joinedGroups: ColumnGroup[] = []
+    
+    Array.from(joinedTables).forEach(tableId => {
+      const table = availableJoinTables.find(t => t.id === tableId)
+      const selectedCols = selectedJoinColumns.get(tableId) || new Set()
+      
+      if (table && selectedCols.size > 0) {
+        const IconComponent = getIconComponent(table.icon)
+        
+        joinedGroups.push({
+          name: `🔗 ${table.displayName}`,
+          columns: Array.from(selectedCols).map(colName => `${table.name}.${colName}`),
+          color: 'text-purple-600',
+          icon: IconComponent,
+          description: `Joined from ${table.dataSource}`
+        })
+      }
+    })
+
+    // Combine original groups with joined groups
+    const updatedGroups = [...baseGroups, ...joinedGroups]
+    setColumnGroups(updatedGroups)
+  }
+
+  // Helper function to convert icon names to components
+  const getIconComponent = (iconName: string) => {
+    const iconMap: { [key: string]: any } = {
+      'User': User,
+      'Receipt': Receipt,
+      'Shield': Shield,
+      'DollarSign': DollarSign,
+      'FileText': Package, // Map FileText to Package for now
+      'Percent': Coins, // Map Percent to Coins for now
+      'MapPin': Package, // Map MapPin to Package for now
+      'Calculator': DollarSign,
+      'Package': Package,
+      'Server': Database,
+      'Package2': Package,
+      'Clock': Clock
+    }
+    return iconMap[iconName] || Package // Default fallback
   }
 
   // Column group management
@@ -504,10 +786,10 @@ export default function SqlLabPage() {
         return removeColumnFromQuery(prev, columnName)
       } else {
         // Add column to query
-        if (!prev.trim()) {
-          return columnName
-        }
-        return prev + (prev.endsWith(',') || prev.endsWith(' ') ? '' : ', ') + columnName
+      if (!prev.trim()) {
+        return columnName
+      }
+      return prev + (prev.endsWith(',') || prev.endsWith(' ') ? '' : ', ') + columnName
       }
     })
   }
@@ -604,7 +886,8 @@ export default function SqlLabPage() {
     const startTime = Date.now()
     
     try {
-      const data = await apiUtils.executeQuery(currentQuery, 'duckdb')
+      // Execute query with the selected data source table name
+      const data = await apiUtils.executeQuery(currentQuery, 'duckdb', dataSource)
       const executionTime = Date.now() - startTime
       
       // Debug logging to understand API response structure
@@ -989,7 +1272,7 @@ export default function SqlLabPage() {
         throw new Error('AI features are disabled. Enable them by setting NEXT_PUBLIC_ENABLE_AI=true in your environment configuration.')
       }
 
-      const data = await apiUtils.generateAIQuery(aiPrompt)
+      const data = await apiUtils.generateAIQuery(aiPrompt, {}, dataSource)
       
       // Extract the SQL query from the structured response
       let generatedSQL = ''
@@ -1163,8 +1446,83 @@ LIMIT 10;`
     }
   }
 
-  // Quick query templates
-  const quickQueryTemplates: QueryTemplate[] = [
+  // Get quick query templates based on data source
+  const getQuickQueryTemplates = (): QueryTemplate[] => {
+    if (dataSource === 'FOCUS') {
+      return [
+        {
+          id: 'focus-cost-by-service',
+          name: 'Cost by Service',
+          category: 'Analytics',
+          description: 'Get total effective cost by service category',
+          query: `SELECT 
+    ServiceCategory,
+    ServiceName,
+    SUM(EffectiveCost) AS TotalCost,
+    COUNT(*) AS RecordCount
+FROM FOCUS 
+WHERE BillingPeriodStart >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH)
+GROUP BY ServiceCategory, ServiceName
+ORDER BY TotalCost DESC
+LIMIT 20;`
+        },
+        {
+          id: 'focus-account-costs',
+          name: 'Cost by Account and Region',
+          category: 'Analytics',
+          description: 'Analyze costs by billing account and region',
+          query: `SELECT 
+    BillingAccountName,
+    RegionName,
+    SUM(EffectiveCost) AS TotalCost,
+    SUM(ListCost) AS TotalListCost,
+    SUM(ListCost - EffectiveCost) AS TotalSavings
+FROM FOCUS 
+WHERE BillingPeriodStart >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)
+GROUP BY BillingAccountName, RegionName
+ORDER BY TotalCost DESC;`
+        },
+        {
+          id: 'focus-commitment-discounts',
+          name: 'Commitment Discount Analysis',
+          category: 'Savings',
+          description: 'Analyze commitment-based discounts and savings',
+          query: `SELECT 
+    CommitmentDiscountType,
+    CommitmentDiscountCategory,
+    COUNT(DISTINCT CommitmentDiscountId) AS DiscountCount,
+    SUM(EffectiveCost) AS TotalEffectiveCost,
+    SUM(ListCost) AS TotalListCost,
+    SUM(ListCost - EffectiveCost) AS CommitmentSavings
+FROM FOCUS 
+WHERE CommitmentDiscountId IS NOT NULL
+    AND BillingPeriodStart >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH)
+GROUP BY CommitmentDiscountType, CommitmentDiscountCategory
+ORDER BY CommitmentSavings DESC;`
+        },
+        {
+          id: 'focus-resource-utilization',
+          name: 'Resource Utilization',
+          category: 'Resources',
+          description: 'Analyze resource costs and utilization',
+          query: `SELECT 
+    ResourceType,
+    COUNT(DISTINCT ResourceId) AS UniqueResources,
+    SUM(ConsumedQuantity) AS TotalQuantity,
+    ConsumedUnit,
+    SUM(EffectiveCost) AS TotalCost,
+    AVG(EffectiveCost) AS AvgCostPerResource
+FROM FOCUS 
+WHERE ResourceId IS NOT NULL
+    AND BillingPeriodStart >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH)
+GROUP BY ResourceType, ConsumedUnit
+ORDER BY TotalCost DESC
+LIMIT 15;`
+        }
+      ]
+    } else {
+      // CUR 2.0 templates
+      return [
     {
       id: 'monthly-cost-trends',
       name: 'Monthly Cost Trends',
@@ -1213,6 +1571,8 @@ GROUP BY instance_id, product_instance_type, product_region
 ORDER BY total_cost DESC;`
     }
   ]
+    }
+  }
 
   return (
     <ViewerRestricted>
@@ -1222,11 +1582,11 @@ ORDER BY total_cost DESC;`
             <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600">
               <Database className="h-6 w-6 text-white" />
             </div>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">SQL Lab</h1>
-            <p className="text-muted-foreground">
-              Interactive SQL environment for AWS Cost and Usage Report analysis
-            </p>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">SQL Lab</h1>
+              <p className="text-muted-foreground">
+                Interactive SQL environment for {dataSource === 'CUR' ? 'AWS Cost and Usage Report' : 'FOCUS data'} analysis
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1238,6 +1598,49 @@ ORDER BY total_cost DESC;`
               <Shield className="h-3 w-3 mr-1" />
               Secure Query Environment
             </Badge>
+            
+            {/* Data Source Toggle */}
+            <Select
+              value={dataSource}
+              onValueChange={(value: 'CUR' | 'FOCUS') => setDataSource(value)}
+              disabled={isLoadingSchema}
+            >
+              <SelectTrigger className="w-32 h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CUR" className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-600" />
+                    CUR 2.0
+          </div>
+                </SelectItem>
+                <SelectItem value="FOCUS" className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-purple-600" />
+                    FOCUS
+        </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            
+            {/* Table Join Toggle */}
+            <Button
+              variant={showJoinPanel ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowJoinPanel(!showJoinPanel)}
+              className="text-xs"
+              title="Join additional tables to enhance analysis"
+            >
+              <Split className="h-3 w-3 mr-1" />
+              Join Tables
+              {joinedTables.size > 0 && (
+                <Badge variant="secondary" className="ml-1 text-xs">
+                  +{getTotalNewColumns()} cols
+                </Badge>
+              )}
+            </Button>
+            
             <Button 
               variant="outline" 
               size="sm" 
@@ -1249,6 +1652,147 @@ ORDER BY total_cost DESC;`
             </Button>
           </div>
         </div>
+
+        {/* Table Join Panel - Compact Horizontal Layout */}
+        {showJoinPanel && (
+          <div className="mx-6 mb-4 bg-gray-50 border rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Split className="h-4 w-4" />
+                <span className="font-medium text-sm">Join Additional Tables</span>
+                <Badge variant="outline" className="text-xs">{dataSource} Core</Badge>
+                {joinedTables.size > 0 && (
+                  <Badge variant="secondary" className="text-xs">
+                    +{getTotalNewColumns()} columns
+                  </Badge>
+                )}
+              </div>
+            </div>
+            
+            {/* Horizontal Table Cards */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              {availableJoinTables.map((table) => {
+                const isJoined = joinedTables.has(table.id)
+                const selectedColumns = selectedJoinColumns.get(table.id) || new Set()
+                const IconComponent = getIconComponent(table.icon)
+                
+                return (
+                  <Collapsible key={table.id} defaultOpen={true}>
+                    <Card className={`transition-all ${isJoined ? 'border-blue-400 bg-blue-50/30' : 'border-gray-200'}`}>
+                      <CardContent className="p-3">
+                        {/* Compact Table Header */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <IconComponent className="h-4 w-4 text-gray-600 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <h4 className="font-medium text-sm truncate">{table.displayName}</h4>
+                              <p className="text-xs text-muted-foreground truncate">{table.dataSource}</p>
+                            </div>
+                          </div>
+                          <Button
+                            variant={isJoined ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => toggleJoinTable(table.id)}
+                            className="text-xs h-6 px-2 flex-shrink-0"
+                          >
+                            {isJoined ? 'Joined' : 'Join'}
+                          </Button>
+                        </div>
+                        
+                        {/* Join Status & Column Count */}
+                        {isJoined && (
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {selectedColumns.size}/{table.sampleColumns.length} cols
+                            </Badge>
+                            <CollapsibleTrigger asChild>
+                              <Button variant="ghost" size="sm" className="text-xs h-5 px-1">
+                                <ChevronDown className="h-3 w-3" />
+                                Configure
+                              </Button>
+                            </CollapsibleTrigger>
+                          </div>
+                        )}
+                        
+                        {/* Join Key Preview */}
+                        <div className="text-xs text-muted-foreground mb-2">
+                          {table.joinKeys[0] && (
+                            <span className="font-mono">
+                              {dataSource}.{table.joinKeys[0].sourceColumn} → {table.name}.{table.joinKeys[0].targetColumn}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* Collapsible Column Selection */}
+                        {isJoined && (
+                          <CollapsibleContent className="border-t pt-2 mt-2">
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium">Select Columns:</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => toggleAllColumnsForTable(table.id)}
+                                  className="text-xs h-5 px-1"
+                                >
+                                  {selectedColumns.size === table.sampleColumns.length ? (
+                                    <>
+                                      <Minus className="h-3 w-3 mr-1" />
+                                      None
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Check className="h-3 w-3 mr-1" />
+                                      All
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                              
+                              <div className="max-h-32 overflow-y-auto space-y-1">
+                                {table.sampleColumns.map((column) => {
+                                  const isSelected = selectedColumns.has(column.name)
+                                  return (
+                                    <div 
+                                      key={column.name}
+                                      className={`flex items-center space-x-2 p-1 rounded cursor-pointer transition-colors text-xs ${
+                                        isSelected 
+                                          ? 'bg-blue-100 text-blue-900' 
+                                          : 'hover:bg-gray-100'
+                                      }`}
+                                      onClick={() => toggleJoinColumn(table.id, column.name)}
+                                    >
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onChange={() => toggleJoinColumn(table.id, column.name)}
+                                        className="pointer-events-none h-3 w-3"
+                                      />
+                                      <span className="font-mono truncate flex-1">{column.name}</span>
+                                      <span className="text-muted-foreground">{column.type}</span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          </CollapsibleContent>
+                        )}
+                        
+                        {/* Preview when not joined */}
+                        {!isJoined && (
+                          <div className="text-xs">
+                            <span className="text-muted-foreground">
+                              {table.sampleColumns.length} columns available
+                            </span>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Collapsible>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-6">
           {/* Resizable Sidebar */}
@@ -1271,8 +1815,14 @@ ORDER BY total_cost DESC;`
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <Database className="h-4 w-4 text-blue-600 flex-shrink-0" />
                         <div className="text-left min-w-0 flex-1">
-                          <div className="font-medium text-sm">AWS CUR 2.0 Columns</div>
-                          <div className="text-xs text-muted-foreground">Browse and select columns</div>
+                          <div className="font-medium text-sm">
+                            {dataSource === 'CUR' ? 'AWS CUR 2.0 Columns' : 'FOCUS Columns'}
+                        </div>
+                          <div className="text-xs text-muted-foreground">
+                            {dataSource === 'CUR' 
+                              ? 'Browse and select columns' 
+                              : 'FinOps Open Cost Specification'}
+                      </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
@@ -1341,33 +1891,33 @@ ORDER BY total_cost DESC;`
                           })
                           
                           return (
-                            <div key={group.name} className="border rounded-lg overflow-hidden bg-background">
-                              <div 
-                                className="flex items-center justify-between cursor-pointer hover:bg-muted/50 p-3 bg-muted/20"
-                                onClick={() => toggleColumnGroup(group.name)}
-                              >
-                                <div className="flex items-center gap-2">
-                                  {expandedGroups.has(group.name) ? 
-                                    <ChevronDown className="h-3 w-3" /> : 
-                                    <ChevronRight className="h-3 w-3" />
-                                  }
-                                  <group.icon className={`h-3 w-3 ${group.color}`} />
-                                  <span className={`font-medium text-xs ${group.color}`}>{group.name}</span>
+                        <div key={group.name} className="border rounded-lg overflow-hidden bg-background">
+                          <div 
+                            className="flex items-center justify-between cursor-pointer hover:bg-muted/50 p-3 bg-muted/20"
+                            onClick={() => toggleColumnGroup(group.name)}
+                          >
+                            <div className="flex items-center gap-2">
+                              {expandedGroups.has(group.name) ? 
+                                <ChevronDown className="h-3 w-3" /> : 
+                                <ChevronRight className="h-3 w-3" />
+                              }
+                              <group.icon className={`h-3 w-3 ${group.color}`} />
+                                <span className={`font-medium text-xs ${group.color}`}>{group.name}</span>
                                   {columnSearch.trim() && matchingColumns.length !== group.columns.length && (
                                     <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-300">
                                       {matchingColumns.length} matches
                                     </Badge>
                                   )}
-                                </div>
-                                <Badge variant="outline" className="text-xs">
+                            </div>
+                            <Badge variant="outline" className="text-xs">
                                   {columnSearch.trim() ? matchingColumns.length : group.columns.length}
-                                </Badge>
-                              </div>
-                              
-                              {expandedGroups.has(group.name) && (
+                            </Badge>
+                          </div>
+                          
+                          {expandedGroups.has(group.name) && (
                                 <div className="p-2 space-y-1 bg-background max-h-80 overflow-y-auto">
                                   {matchingColumns.map((columnName) => {
-                                    const column = databaseSchema?.tables[0]?.columns.find(c => c.name === columnName)
+                                  const column = databaseSchema?.tables[0]?.columns.find(c => c.name === columnName)
                                     const isSelected = selectedColumns.has(columnName)
                                     
                                     // Highlight search matches
@@ -1377,10 +1927,10 @@ ORDER BY total_cost DESC;`
                                           '<mark class="bg-yellow-200 text-yellow-900 rounded px-1">$1</mark>'
                                         )
                                       : columnName
-                                    
-                                    return (
-                                      <div 
-                                        key={columnName}
+                                  
+                                  return (
+                                    <div 
+                                      key={columnName}
                                         className={`p-2 rounded cursor-pointer group border transition-colors ${
                                           isSelected 
                                             ? 'bg-blue-100 border-blue-400 ring-1 ring-blue-300' 
@@ -1388,8 +1938,8 @@ ORDER BY total_cost DESC;`
                                         }`}
                                         onClick={() => toggleColumnInQuery(columnName)}
                                         title={`${isSelected ? 'Remove' : 'Add'} ${columnName} ${isSelected ? 'from' : 'to'} query`}
-                                      >
-                                        <div className="flex items-center justify-between">
+                                    >
+                                      <div className="flex items-center justify-between">
                                           <div className="flex items-center gap-2 min-w-0 flex-1">
                                             {isSelected && (
                                               <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" title="Selected in query" />
@@ -1407,18 +1957,18 @@ ORDER BY total_cost DESC;`
                                               isSelected ? 'opacity-100 bg-blue-600' : 'opacity-0 group-hover:opacity-100'
                                             }`}
                                           >
-                                            {column?.type}
-                                          </Badge>
-                                        </div>
+                                          {column?.type}
+                                        </Badge>
                                       </div>
-                                    )
-                                  })}
+                                    </div>
+                                  )
+                                })}
                                   {matchingColumns.length === 0 && columnSearch.trim() && (
                                     <div className="text-xs text-muted-foreground text-center py-4">
                                       No columns match "{columnSearch}" in this group
-                                    </div>
-                                  )}
-                                </div>
+                            </div>
+                          )}
+                        </div>
                               )}
                             </div>
                           )
@@ -1452,7 +2002,7 @@ ORDER BY total_cost DESC;`
                         </div>
                       </div>
                       <div className="flex-shrink-0">
-                        {aiOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      {aiOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       </div>
                     </Button>
                   </CollapsibleTrigger>
@@ -1504,8 +2054,8 @@ ORDER BY total_cost DESC;`
                         </div>
                         <div className="bg-background rounded-lg border border-green-200">
                           <pre className="text-xs font-mono whitespace-pre-wrap p-4 max-h-48 overflow-y-auto leading-relaxed">
-                            {aiGeneratedQuery}
-                          </pre>
+                          {aiGeneratedQuery}
+                        </pre>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <span>💡 Review the generated query before execution</span>
@@ -1525,17 +2075,19 @@ ORDER BY total_cost DESC;`
                         <BookOpen className="h-4 w-4 text-green-600 flex-shrink-0" />
                         <div className="text-left min-w-0 flex-1">
                           <div className="font-medium text-sm">Quick Templates</div>
-                          <div className="text-xs text-muted-foreground">Ready-to-use query templates</div>
+                          <div className="text-xs text-muted-foreground">
+                            {dataSource === 'CUR' ? 'AWS CUR 2.0 query templates' : 'FOCUS query templates'}
                         </div>
                       </div>
+                      </div>
                       <div className="flex-shrink-0">
-                        {templatesOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      {templatesOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       </div>
                     </Button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="px-6 py-4 border-b border-border/40">
                     <div className="space-y-2 max-h-80 overflow-y-auto">
-                      {quickQueryTemplates.map((template) => (
+                      {getQuickQueryTemplates().map((template) => (
                         <div key={template.id} className="border rounded-lg p-3 space-y-2 hover:bg-muted/30 transition-colors">
                           <div className="flex items-center justify-between">
                             <h4 className="text-xs font-medium">{template.name}</h4>
@@ -1623,14 +2175,14 @@ ORDER BY total_cost DESC;`
                                   >
                                     <Copy className="h-3 w-3" />
                                   </Button>
-                                  <Button 
-                                    onClick={() => handleHistorySelect(query)} 
-                                    size="sm" 
-                                    variant="outline" 
-                                    className="h-5 text-xs px-2"
-                                  >
-                                    Use
-                                  </Button>
+                                <Button 
+                                  onClick={() => handleHistorySelect(query)} 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="h-5 text-xs px-2"
+                                >
+                                  Use
+                                </Button>
                                   <Button 
                                     onClick={() => deleteHistoryItem(index)} 
                                     size="sm" 
@@ -1639,7 +2191,7 @@ ORDER BY total_cost DESC;`
                                     title="Delete query"
                                   >
                                     <Trash2 className="h-3 w-3" />
-                                  </Button>
+                                </Button>
                                 </div>
                               </div>
                               <p className="text-xs text-muted-foreground font-mono leading-relaxed">
@@ -1656,6 +2208,11 @@ ORDER BY total_cost DESC;`
                     )}
                   </CollapsibleContent>
                 </Collapsible>
+
+                {/* Export Management */}
+                <div className="px-4 py-3">
+                  <ExportManagement />
+                </div>
               </CardContent>
             </Card>
             

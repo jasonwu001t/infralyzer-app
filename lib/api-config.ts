@@ -235,14 +235,18 @@ export const apiRequest = async <T = any>(
  * Utility functions for common API operations
  */
 export const apiUtils = {
-  executeQuery: async (query: string, engine = 'duckdb') => {
+  executeQuery: async (query: string, engine = 'duckdb', tableName?: string) => {
     return apiRequest(API_ENDPOINTS.FINOPS.QUERY, {
       method: 'POST',
-      body: { query, engine }
+      body: { 
+        query, 
+        engine,
+        ...(tableName && { table_name: tableName })
+      }
     })
   },
 
-  generateAIQuery: async (userQuery: string, modelConfig: any = {}) => {
+  generateAIQuery: async (userQuery: string, modelConfig: any = {}, targetTable = 'CUR') => {
     if (!API_CONFIG.ENABLE_AI) {
       throw new Error('AI features are disabled. Enable them by setting NEXT_PUBLIC_ENABLE_AI=true')
     }
@@ -260,7 +264,7 @@ export const apiUtils = {
           ...modelConfig
         },
         include_examples: true,
-        target_table: 'CUR'
+        target_table: targetTable
       }
     })
   },

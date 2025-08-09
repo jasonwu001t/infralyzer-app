@@ -4,7 +4,7 @@
  */
 "use client"
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -16,7 +16,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
+import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Download, Save, CheckCircle, Clock, Eye, Search, Filter, ChevronUp, ChevronDown, FilterX, Maximize2, Minimize2, X, Table2 } from 'lucide-react'
+import EnhancedSaveDialog from './enhanced-save-dialog'
 
 interface QueryResult {
   headers: string[]
@@ -35,6 +40,48 @@ interface SavedResult {
   savedAt: string
 }
 
+interface S3ExportConfig {
+  bucketName: string
+  keyPrefix: string
+  format: 'csv' | 'json' | 'parquet'
+  region: string
+}
+
+interface RecurringRefreshConfig {
+  enabled: boolean
+  frequency: 'daily' | 'weekly' | 'monthly'
+  time: string // HH:MM format
+  dayOfWeek?: number // 0-6 for weekly
+  dayOfMonth?: number // 1-31 for monthly
+  mode: 'override' | 'append'
+}
+
+interface NotificationConfig {
+  slack?: {
+    enabled: boolean
+    webhookUrl: string
+    channel?: string
+  }
+  email?: {
+    enabled: boolean
+    recipients: string[]
+    subject?: string
+  }
+  phone?: {
+    enabled: boolean
+    numbers: string[]
+    provider: 'twilio' | 'aws-sns'
+  }
+}
+
+interface EnhancedSaveConfig {
+  name: string
+  description?: string
+  s3Export?: S3ExportConfig
+  recurringRefresh?: RecurringRefreshConfig
+  notifications?: NotificationConfig
+}
+
 interface SqlQueryResultsProps {
   results: QueryResult | null
   currentQuery: string
@@ -45,6 +92,8 @@ export default function SqlQueryResults({ results, currentQuery, onSaveResult }:
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
   const [resultName, setResultName] = useState('')
   const [isFullscreen, setIsFullscreen] = useState(false)
+  
+  // No longer needed - EnhancedSaveDialog manages its own state
   
   // Filtering and sorting state
   const [globalSearch, setGlobalSearch] = useState('')
@@ -467,12 +516,19 @@ export default function SqlQueryResults({ results, currentQuery, onSaveResult }:
     window.URL.revokeObjectURL(url)
   }
 
-  const saveResults = () => {
-    if (!results || !resultName.trim() || !onSaveResult) return
+  const handleEnhancedSave = useCallback((config: any, options: any) => {
+    if (!results || !config.name.trim() || !onSaveResult) return
 
+    // TODO: Send enhanced save configuration to backend
+    console.log('Enhanced save configuration:', {
+      ...config,
+      ...options
+    })
+
+    // For now, still use the basic save interface
     const savedResult: SavedResult = {
       id: `result_${Date.now()}`,
-      name: resultName.trim(),
+      name: config.name.trim(),
       query: currentQuery,
       result: results,
       savedAt: new Date().toISOString()
@@ -480,8 +536,11 @@ export default function SqlQueryResults({ results, currentQuery, onSaveResult }:
 
     onSaveResult(savedResult)
     setSaveDialogOpen(false)
-    setResultName('')
-  }
+  }, [results, onSaveResult, currentQuery])
+
+  const handleCancelSave = useCallback(() => {
+    setSaveDialogOpen(false)
+  }, [])
 
   const formatValue = (value: string | number | null): string => {
     if (value === null || value === undefined) return '-'
@@ -685,35 +744,24 @@ export default function SqlQueryResults({ results, currentQuery, onSaveResult }:
                       className="h-8 px-3 text-xs"
                     >
                       <Save className="h-3 w-3 mr-1" />
-                      Save
+                      Export
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                      <DialogTitle>Save Query Results</DialogTitle>
+                      <DialogTitle className="flex items-center gap-2">
+                        <Save className="h-5 w-5" />
+                        Create Data Export
+                      </DialogTitle>
                       <DialogDescription>
-                        Give your results a name to save them for later reference.
+                        Configure automated data export with S3 storage, recurring refresh schedules, and notification alerts.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="result-name">Result Name</Label>
-                        <Input
-                          id="result-name"
-                          value={resultName}
-                          onChange={(e) => setResultName(e.target.value)}
-                          placeholder="e.g., Monthly EC2 Costs Analysis"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button 
-                        onClick={saveResults} 
-                        disabled={!resultName.trim()}
-                      >
-                        Save Results
-                      </Button>
-                    </DialogFooter>
+                    <EnhancedSaveDialog
+                      onSave={handleEnhancedSave}
+                      onCancel={handleCancelSave}
+                      results={results}
+                    />
                   </DialogContent>
                 </Dialog>
               )}
