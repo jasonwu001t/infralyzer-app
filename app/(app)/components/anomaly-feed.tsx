@@ -4,8 +4,9 @@
  */
 "use client"
 
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle, TrendingUp, Clock, DollarSign } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { useFilteredData, DashboardFilters } from "@/lib/hooks/use-dashboard-filters"
@@ -18,6 +19,11 @@ interface AnomalyData {
   service?: string
   region?: string
   impact: number
+  description: string
+  trend: 'up' | 'down' | 'spike'
+  baselinePeriod: string
+  percentageChange: number
+  recommendation: string
 }
 
 const generateAnomalyData = async (filters: DashboardFilters, userId: string, role: string, organization: string): Promise<AnomalyData[]> => {
@@ -26,11 +32,76 @@ const generateAnomalyData = async (filters: DashboardFilters, userId: string, ro
   const multiplier = baseMultiplier * roleMultiplier
 
   const allAnomalies = [
-    { id: "anom-1", title: "Unusual spike in S3 Data Transfer costs", severity: "High" as const, date: "2024-09-28", service: "Amazon S3", region: "us-east-1", impact: 15000 },
-    { id: "anom-2", title: "EC2 spend in ap-southeast-2 increased by 40%", severity: "Medium" as const, date: "2024-09-26", service: "Amazon EC2", region: "ap-southeast-2", impact: 8500 },
-    { id: "anom-3", title: "RDS idle instance detected", severity: "Low" as const, date: "2024-09-25", service: "Amazon RDS", region: "us-west-2", impact: 2400 },
-    { id: "anom-4", title: "Lambda invocations surge in us-west-1", severity: "Medium" as const, date: "2024-09-24", service: "AWS Lambda", region: "us-west-1", impact: 5200 },
-    { id: "anom-5", title: "DynamoDB read capacity overprovisioned", severity: "Low" as const, date: "2024-09-23", service: "Amazon DynamoDB", region: "us-east-1", impact: 1800 },
+    { 
+      id: "anom-1", 
+      title: "Unusual spike in S3 Data Transfer costs", 
+      severity: "High" as const, 
+      date: "2024-09-28", 
+      service: "Amazon S3", 
+      region: "us-east-1", 
+      impact: 15000,
+      description: "Data transfer costs exceeded baseline by 340% in the last 24 hours",
+      trend: "spike" as const,
+      baselinePeriod: "7-day average",
+      percentageChange: 340,
+      recommendation: "Review recent data migration activities and implement CloudFront caching"
+    },
+    { 
+      id: "anom-2", 
+      title: "EC2 spend in ap-southeast-2 increased by 40%", 
+      severity: "Medium" as const, 
+      date: "2024-09-26", 
+      service: "Amazon EC2", 
+      region: "ap-southeast-2", 
+      impact: 8500,
+      description: "Regional EC2 costs showing consistent upward trend over 5 days",
+      trend: "up" as const,
+      baselinePeriod: "30-day average",
+      percentageChange: 40,
+      recommendation: "Investigate new instance launches and consider Reserved Instance coverage"
+    },
+    { 
+      id: "anom-3", 
+      title: "RDS idle instance detected", 
+      severity: "Low" as const, 
+      date: "2024-09-25", 
+      service: "Amazon RDS", 
+      region: "us-west-2", 
+      impact: 2400,
+      description: "Database instance showing <5% CPU utilization for 72+ hours",
+      trend: "down" as const,
+      baselinePeriod: "Historical usage",
+      percentageChange: -95,
+      recommendation: "Consider stopping or downsizing unused database instances"
+    },
+    { 
+      id: "anom-4", 
+      title: "Lambda invocations surge in us-west-1", 
+      severity: "Medium" as const, 
+      date: "2024-09-24", 
+      service: "AWS Lambda", 
+      region: "us-west-1", 
+      impact: 5200,
+      description: "Function execution count increased 180% causing duration spikes",
+      trend: "spike" as const,
+      baselinePeriod: "14-day average",
+      percentageChange: 180,
+      recommendation: "Review function triggers and consider provisioned concurrency"
+    },
+    { 
+      id: "anom-5", 
+      title: "DynamoDB read capacity overprovisioned", 
+      severity: "Low" as const, 
+      date: "2024-09-23", 
+      service: "Amazon DynamoDB", 
+      region: "us-east-1", 
+      impact: 1800,
+      description: "Provisioned read capacity exceeding actual usage by 75%",
+      trend: "down" as const,
+      baselinePeriod: "Monthly usage pattern",
+      percentageChange: -75,
+      recommendation: "Switch to On-Demand billing or reduce provisioned capacity"
+    },
   ]
 
   let filteredAnomalies = allAnomalies
@@ -150,36 +221,118 @@ export default function AnomalyFeed() {
     </Card>
   )
 
+  const totalFinancialImpact = anomalyData.reduce((sum, item) => sum + Math.abs(item.impact), 0)
+  const highSeverityCount = anomalyData.filter(item => item.severity === 'High').length
+
+  const getTrendIcon = (trend: string) => {
+    switch (trend) {
+      case 'up': return <TrendingUp className="h-3 w-3 text-red-500" />
+      case 'down': return <TrendingUp className="h-3 w-3 text-green-500 transform rotate-180" />
+      case 'spike': return <AlertTriangle className="h-3 w-3 text-orange-500" />
+      default: return <Clock className="h-3 w-3 text-gray-500" />
+    }
+  }
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case 'High': return 'destructive'
+      case 'Medium': return 'secondary'
+      case 'Low': return 'outline'
+      default: return 'outline'
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recent Cost Anomalies</CardTitle>
-        <CardDescription>AI-detected unusual spending.</CardDescription>
+        <CardTitle className="flex items-center justify-between">
+          <span>Cost Anomaly Detection</span>
+          <div className="flex gap-2">
+            {highSeverityCount > 0 && (
+              <Badge variant="destructive" className="text-xs">
+                {highSeverityCount} Critical
+              </Badge>
+            )}
+            <Badge variant="outline" className="text-xs">
+              ${totalFinancialImpact.toLocaleString()} impact
+            </Badge>
+          </div>
+        </CardTitle>
+        <CardDescription>
+          AI-powered detection of unusual spending patterns and optimization opportunities
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {anomalyData.map((item) => (
-          <div key={item.id} className="flex items-start gap-4">
-            <AlertTriangle
-              className={`mt-1 h-5 w-5 flex-shrink-0 ${
-                item.severity === "High"
-                  ? "text-red-500"
-                  : item.severity === "Medium"
-                    ? "text-yellow-500"
-                    : "text-blue-500"
-              }`}
-            />
-            <div className="flex-grow">
-              <p className="text-sm font-medium">{item.title}</p>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>{item.date}</span>
-                {item.service && <span>• {item.service}</span>}
-                {item.region && <span>• {item.region}</span>}
-                <span>• Impact: ${item.impact.toLocaleString()}</span>
+          <div key={item.id} className="border rounded-lg p-3 space-y-3">
+            {/* Header Row */}
+            <div className="flex items-start gap-3">
+              <AlertTriangle
+                className={`mt-1 h-4 w-4 flex-shrink-0 ${
+                  item.severity === "High"
+                    ? "text-red-500"
+                    : item.severity === "Medium"
+                      ? "text-yellow-500"
+                      : "text-blue-500"
+                }`}
+              />
+              <div className="flex-grow">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">{item.title}</p>
+                  <Badge variant={getSeverityColor(item.severity)} className="text-xs">
+                    {item.severity}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
               </div>
             </div>
-            <Button variant="ghost" size="sm" className="ml-auto">
-              View
-            </Button>
+
+            {/* Metrics Row */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              <div className="flex items-center gap-1">
+                <DollarSign className="h-3 w-3 text-muted-foreground" />
+                <span className="text-muted-foreground">Impact:</span>
+                <span className="font-medium">${item.impact.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {getTrendIcon(item.trend)}
+                <span className="text-muted-foreground">Change:</span>
+                <span className={`font-medium ${item.percentageChange > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {item.percentageChange > 0 ? '+' : ''}{item.percentageChange}%
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Clock className="h-3 w-3 text-muted-foreground" />
+                <span className="text-muted-foreground">vs:</span>
+                <span className="font-medium">{item.baselinePeriod}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">Date:</span>
+                <span className="font-medium">{item.date}</span>
+              </div>
+            </div>
+
+            {/* Service & Region Info */}
+            <div className="flex items-center gap-4 text-xs">
+              {item.service && (
+                <div>
+                  <span className="text-muted-foreground">Service:</span>
+                  <span className="ml-1 font-medium">{item.service}</span>
+                </div>
+              )}
+              {item.region && (
+                <div>
+                  <span className="text-muted-foreground">Region:</span>
+                  <span className="ml-1 font-medium">{item.region}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Recommendation */}
+            <div className="bg-blue-50 p-2 rounded text-xs">
+              <div className="text-blue-700 font-medium mb-1">Recommended Action:</div>
+              <div className="text-blue-600">{item.recommendation}</div>
+            </div>
           </div>
         ))}
       </CardContent>

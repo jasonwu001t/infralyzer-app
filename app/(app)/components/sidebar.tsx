@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, BarChart3, Sparkles, Target, BadgePercent, Code, Bot, Server, ChevronLeft, ChevronRight } from "lucide-react"
+import { LayoutDashboard, BarChart3, Sparkles, Target, Code, Bot, Server, ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
@@ -12,7 +12,6 @@ const menuItems = [
   { icon: Server, text: "Capacity Management", href: "/capacity" },
   { icon: Sparkles, text: "Optimization", href: "/optimization" },
   { icon: Target, text: "Cost Allocation", href: "/allocation" },
-  { icon: BadgePercent, text: "Discounts", href: "/discounts" },
   { icon: Code, text: "SQL Lab", href: "/sql-lab" },
   { icon: Bot, text: "AI Insights", href: "/ai-insights" },
 ]

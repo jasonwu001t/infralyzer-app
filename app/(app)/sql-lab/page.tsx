@@ -9,7 +9,7 @@ import SqlQueryResults from "../components/sql-query-results"
 import type { QueryTemplate, QueryResult } from "../components/sql-query-editor"
 import type { SavedResult } from "../components/sql-query-results"
 import type { SavedQuery as UserSavedQuery } from "@/lib/types/user"
-import { Search, ChevronDown, ChevronRight, Database, Table2, Coins, Tag, Receipt, User, Clock, Package, DollarSign, Shield, Archive, Zap, Split, Brain, BookOpen, Loader2, ArrowRight, Copy, Trash2 } from "lucide-react"
+import { Search, ChevronDown, ChevronRight, Database, Table2, Coins, Tag, Receipt, User, Clock, Package, DollarSign, Shield, Archive, Zap, Split, Brain, BookOpen, Loader2, ArrowRight, Copy, Trash2, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -73,9 +73,13 @@ export default function SqlLabPage() {
   // Data Columns state
   const [columnSearch, setColumnSearch] = useState('')
   const [columnGroups, setColumnGroups] = useState<ColumnGroup[]>([])
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['Line Item']))
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [databaseSchema, setDatabaseSchema] = useState<DatabaseSchema | null>(null)
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set())
+  
+  // Resizable sidebar state
+  const [sidebarWidth, setSidebarWidth] = useState(320) // Default width in pixels
+  const [isResizing, setIsResizing] = useState(false)
   
   // Ref to prevent duplicate API calls
   const executionRef = useRef<boolean>(false)
@@ -105,6 +109,39 @@ export default function SqlLabPage() {
   useEffect(() => {
     loadDatabaseSchema()
   }, [])
+
+  // Handle sidebar resizing
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return
+      
+      const newWidth = Math.max(280, Math.min(600, e.clientX - 32)) // Min 280px, Max 600px, account for padding
+      setSidebarWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      setIsResizing(false)
+      document.body.style.userSelect = 'auto'
+      document.body.style.cursor = 'auto'
+    }
+
+    if (isResizing) {
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor = 'col-resize'
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isResizing])
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+  }
 
   const loadDatabaseSchema = () => {
     // AWS CUR 2.0 schema
@@ -400,11 +437,27 @@ export default function SqlLabPage() {
     // Get all available column names
     const availableColumns = databaseSchema.tables[0].columns.map(col => col.name)
     
-    // Simple regex to find column names in the query
+    // More sophisticated column extraction
     availableColumns.forEach(columnName => {
-      // Check if column name appears in the query (word boundary)
-      const regex = new RegExp(`\\b${columnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
-      if (regex.test(query)) {
+      // Escape special regex characters in column name
+      const escapedColumnName = columnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      
+      // Check various patterns where column might appear
+      const patterns = [
+        // In SELECT clause: "SELECT columnName" or "SELECT col1, columnName"
+        new RegExp(`(?:SELECT\\s+|,\\s*)${escapedColumnName}(?=\\s*,|\\s+FROM|\\s*$)`, 'i'),
+        // Standalone column name (for simple queries)
+        new RegExp(`^\\s*${escapedColumnName}\\s*$`, 'i'),
+        // Column in a list: "col1, columnName, col3"
+        new RegExp(`(?:^|,)\\s*${escapedColumnName}\\s*(?:,|$)`, 'i'),
+        // Column after SELECT keyword
+        new RegExp(`SELECT\\s+[^FROM]*\\b${escapedColumnName}\\b`, 'i')
+      ]
+      
+      // Check if any pattern matches
+      const isFound = patterns.some(pattern => pattern.test(query))
+      
+      if (isFound) {
         columns.add(columnName)
       }
     })
@@ -418,15 +471,119 @@ export default function SqlLabPage() {
     setSelectedColumns(newSelectedColumns)
   }, [currentQuery, databaseSchema])
 
-  // Insert column into query
-  const insertColumnIntoQuery = (columnName: string) => {
-    setCurrentQuery(prev => {
-      if (!prev.trim()) {
-        return columnName
+  // Auto-expand groups when searching
+  useEffect(() => {
+    if (columnSearch.trim()) {
+      // Find groups that have matching columns and auto-expand them
+      const groupsWithMatches = columnGroups
+        .filter(group => 
+          group.columns.some(colName => 
+            colName.toLowerCase().includes(columnSearch.toLowerCase())
+          )
+        )
+        .map(group => group.name)
+      
+      if (groupsWithMatches.length > 0 && groupsWithMatches.length <= 3) {
+        // Only auto-expand if there are 3 or fewer matching groups to avoid overwhelming UI
+        setExpandedGroups(prev => {
+          const newSet = new Set(prev)
+          groupsWithMatches.forEach(groupName => newSet.add(groupName))
+          return newSet
+        })
       }
-      // Simple insertion at the end, could be enhanced with cursor position
-      return prev + (prev.endsWith(',') || prev.endsWith(' ') ? '' : ', ') + columnName
+    }
+  }, [columnSearch, columnGroups])
+
+  // Toggle column in query (insert or remove)
+  const toggleColumnInQuery = (columnName: string) => {
+    setCurrentQuery(prev => {
+      const isSelected = selectedColumns.has(columnName)
+      
+      if (isSelected) {
+        // Remove column from query
+        return removeColumnFromQuery(prev, columnName)
+      } else {
+        // Add column to query
+        if (!prev.trim()) {
+          return columnName
+        }
+        return prev + (prev.endsWith(',') || prev.endsWith(' ') ? '' : ', ') + columnName
+      }
     })
+  }
+
+  // Helper function to remove a column from the query string
+  const removeColumnFromQuery = (query: string, columnName: string): string => {
+    if (!query) return query
+    
+    // Escape special regex characters in column name
+    const escapedColumnName = columnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    
+    // Pattern to match the column name with optional comma and whitespace
+    // This handles cases like: "col1, col2, col3" or "SELECT col1, col2 FROM"
+    const patterns = [
+      // Column at the end with preceding comma: ", columnName"
+      new RegExp(`,\\s*${escapedColumnName}(?=\\s|$)`, 'gi'),
+      // Column at the beginning with following comma: "columnName, "
+      new RegExp(`^\\s*${escapedColumnName}\\s*,\\s*`, 'gi'),
+      // Column in the middle: ", columnName, " -> ", "
+      new RegExp(`\\s*,\\s*${escapedColumnName}\\s*,\\s*`, 'gi'),
+      // Only column: "columnName" -> ""
+      new RegExp(`^\\s*${escapedColumnName}\\s*$`, 'gi'),
+      // Column after SELECT: "SELECT columnName" -> "SELECT "
+      new RegExp(`(SELECT\\s+)${escapedColumnName}(?=\\s|,|$)`, 'gi'),
+      // Column in SELECT list: "SELECT col1, columnName" -> "SELECT col1"
+      new RegExp(`(SELECT\\s+[^,]+),\\s*${escapedColumnName}(?=\\s|,|$)`, 'gi')
+    ]
+    
+    let result = query
+    
+    // Apply patterns in order
+    for (const pattern of patterns) {
+      const beforeReplace = result
+      
+      if (pattern.source.includes('SELECT\\\\s+')) {
+        // Handle SELECT patterns specially
+        result = result.replace(pattern, (match, selectPart) => {
+          if (pattern.source.includes('[^,]+')) {
+            // Pattern: "SELECT col1, columnName" -> "SELECT col1"
+            return selectPart.replace(/,\s*$/, '')
+          } else {
+            // Pattern: "SELECT columnName" -> "SELECT "
+            return selectPart
+          }
+        })
+      } else {
+        // Handle other patterns
+        result = result.replace(pattern, (match) => {
+          if (match.includes(',')) {
+            // If the match contains commas, replace with single comma or nothing
+            if (match.trim().startsWith(',') && match.trim().endsWith(',')) {
+              return ', ' // Middle column
+            } else if (match.trim().startsWith(',')) {
+              return '' // End column
+            } else if (match.trim().endsWith(',')) {
+              return '' // Beginning column
+            }
+          }
+          return '' // Single column
+        })
+      }
+      
+      if (result !== beforeReplace) {
+        break // Stop after first successful replacement
+      }
+    }
+    
+    // Clean up any double commas or trailing/leading commas
+    result = result
+      .replace(/,\s*,/g, ',') // Remove double commas
+      .replace(/,\s*$/, '') // Remove trailing comma
+      .replace(/^\s*,/, '') // Remove leading comma
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim()
+    
+    return result
   }
 
   const executeQuery = async () => {
@@ -553,21 +710,145 @@ export default function SqlLabPage() {
       setQueryHistory(prev => [currentQuery, ...prev.slice(0, 19)])
       addQueryHistory(historyItem)
 
-      // Enhanced error message based on error type
-      let errorMessage = 'Unknown error occurred'
+      // Enhanced error handling to extract detailed backend error information
+      let errorMessage = 'Query execution failed'
       let errorDetails = ''
+      let userGuidance = ''
+      let suggestions: string[] = []
+      let originalBackendError = ''
       
       if (error instanceof ApiError) {
-        errorMessage = error.message
-        errorDetails = `Status: ${error.status || 'N/A'} | Endpoint: ${error.endpoint} | Retries: ${error.retryAttempts}`
+        console.log('ApiError details:', {
+          status: error.status,
+          message: error.message,
+          endpoint: error.endpoint
+        })
+
+        // Try to parse the error message to extract backend error details
+        try {
+          originalBackendError = error.message
+          
+          // First, try to parse as structured JSON response from backend
+          if (error.message.startsWith('{') && error.message.includes('"error"')) {
+            const backendError = JSON.parse(error.message)
+            if (backendError.error) {
+              errorMessage = 'SQL Query Error'
+              errorDetails = backendError.error
+              suggestions = backendError.suggestions || []
+              userGuidance = suggestions.join('\n')
+              
+              // Log for debugging
+              console.log('Parsed structured backend error:', backendError)
+            }
+          } 
+          // Check for DuckDB-specific error patterns in raw message
+          else if (error.message.includes('DuckDB query error:')) {
+            errorMessage = 'DuckDB Query Error'
+            
+            // Extract the actual DuckDB error message after "DuckDB query error:"
+            const duckdbMatch = error.message.match(/DuckDB query error:\s*(.+?)(?:\n|$)/i)
+            if (duckdbMatch) {
+              errorDetails = duckdbMatch[1].trim()
+              
+              // Remove any remaining "Candidate bindings:" part from main error
+              errorDetails = errorDetails.replace(/\s*Candidate bindings:.*$/i, '').trim()
+            } else {
+              errorDetails = error.message
+            }
+            
+            // Extract column suggestions if available
+            if (error.message.includes('Candidate bindings:')) {
+              const candidatesMatch = error.message.match(/Candidate bindings:\s*(.+)/i)
+              if (candidatesMatch) {
+                const candidatesText = candidatesMatch[1]
+                const candidateColumns = candidatesText.match(/"([^"]+)"/g)?.map(c => c.replace(/"/g, '')) || []
+                if (candidateColumns.length > 0) {
+                  suggestions.push(`💡 Did you mean: ${candidateColumns.slice(0, 5).join(', ')}`)
+                }
+              }
+            }
+
+            // Add helpful context for column errors
+            if (error.message.includes('column') && error.message.includes('not found')) {
+              suggestions.unshift('🔍 Run "SELECT * FROM CUR LIMIT 1" to see all available columns')
+              suggestions.push('📊 Check AWS CUR 2.0 column names (not legacy CUR 1.0)')
+              suggestions.push('📋 Use the Data Columns browser on the left to find correct column names')
+            }
+            
+            // Add context for table errors
+            if (error.message.includes('table') && (error.message.includes('not found') || error.message.includes('does not exist'))) {
+              suggestions.unshift('✅ Use "CUR" as the main table name for Cost and Usage Report data')
+              suggestions.push('📁 Check if your data source is configured correctly')
+              suggestions.push('🔍 Try: SELECT * FROM CUR LIMIT 1')
+            }
+            
+            userGuidance = suggestions.join('\n')
+          } 
+          // Handle other specific error patterns
+          else if (error.message.includes('column') && error.message.includes('not found')) {
+            errorMessage = 'Column Not Found'
+            errorDetails = error.message
+            suggestions = [
+              '🔍 Run "SELECT * FROM CUR LIMIT 1" to see all available columns',
+              '📊 Check AWS CUR 2.0 column names (not legacy CUR 1.0)',
+              '📋 Use the Data Columns browser on the left to find correct column names'
+            ]
+            userGuidance = suggestions.join('\n')
+          }
+          else {
+            // Handle generic errors - preserve the full message
+            errorDetails = error.message
+          }
+        } catch (parseError) {
+          // Fallback to original error message if parsing fails
+          errorDetails = error.message
+          console.warn('Failed to parse backend error response:', parseError)
+        }
+
+        // Add status-specific guidance if no specific suggestions were extracted
+        if (suggestions.length === 0) {
+          if (error.status === 0 || error.message.includes('Failed to fetch')) {
+            errorMessage = 'Cannot connect to backend API'
+            errorDetails = `Backend API at ${error.endpoint || 'http://localhost:8000'} is not responding`
+            userGuidance = '1. Check if your backend API server is running on http://localhost:8000\n2. Verify CORS settings on your backend\n3. Check your network connection'
+          } else if (error.status === 400) {
+            errorMessage = 'Invalid SQL Query'
+            if (!errorDetails) errorDetails = error.message
+            userGuidance = '1. Check your SQL syntax for errors\n2. Verify table and column names exist\n3. Ensure proper data types in WHERE clauses\n4. Check for missing quotes around string values\n5. Use the Data Columns browser to find correct column names'
+          } else if (error.status === 422) {
+            errorMessage = 'Query Processing Error'
+            if (!errorDetails) errorDetails = error.message
+            userGuidance = '1. Verify your SQL query syntax\n2. Check if referenced tables and columns exist\n3. Ensure query is compatible with DuckDB engine\n4. Try a simpler query to test connectivity\n5. Review AWS CUR 2.0 column naming conventions'
+          } else if (error.status === 500) {
+            errorMessage = 'Backend Server Error'
+            if (!errorDetails) errorDetails = error.message
+            userGuidance = '1. Check backend server logs for detailed errors\n2. Verify database connectivity on backend\n3. Ensure sufficient memory/resources\n4. Contact system administrator if issue persists'
+          } else {
+            if (!errorDetails) errorDetails = error.message
+            userGuidance = 'Please check your query syntax and try again. If the problem persists, contact support.'
+          }
+        }
       } else if (error instanceof Error) {
-        errorMessage = error.message
+        originalBackendError = error.message
+        if (error.message.includes('fetch')) {
+          errorMessage = 'Network Connection Failed'
+          errorDetails = 'Cannot reach the backend API server'
+          userGuidance = '1. Ensure backend API is running on http://localhost:8000\n2. Check your internet connection\n3. Verify firewall settings'
+        } else {
+          errorMessage = error.message
+          errorDetails = error.message
+          userGuidance = 'Please review your SQL query and try again.'
+        }
       }
 
-      // Show error results with enhanced information
+      // Show error results with detailed backend error information
       const errorResults: QueryResult = {
-        headers: ['Error', 'Details'],
-        rows: [[errorMessage, errorDetails]],
+        headers: ['Error Type', 'Details', 'Troubleshooting Steps'],
+        rows: [[
+          errorMessage, 
+          errorDetails || originalBackendError || 'No detailed error information available', 
+          userGuidance || 'Check your query syntax and try again'
+        ]],
         executionTime: Date.now() - startTime,
         rowCount: 0,
         executedAt: new Date().toISOString()
@@ -703,6 +984,11 @@ export default function SqlLabPage() {
     setIsGeneratingAI(true)
     
     try {
+      // First check if AI features are enabled
+      if (process.env.NEXT_PUBLIC_ENABLE_AI === 'false') {
+        throw new Error('AI features are disabled. Enable them by setting NEXT_PUBLIC_ENABLE_AI=true in your environment configuration.')
+      }
+
       const data = await apiUtils.generateAIQuery(aiPrompt)
       
       // Extract the SQL query from the structured response
@@ -739,31 +1025,51 @@ ${generatedSQL}`
       console.error('AI query generation failed:', error)
       
       // Enhanced error handling for AI generation
-      let errorType = 'API Error'
-      let errorMessage = 'Failed to generate query'
+      let errorType = 'AI Query Generation Failed'
+      let errorMessage = 'Unable to generate SQL query'
+      let troubleshooting = ''
       
       if (error instanceof ApiError) {
-        if (error.status === 0) {
-          errorType = 'Network Error'
-          errorMessage = 'Cannot connect to AI service. Check backend URL configuration.'
+        if (error.status === 0 || error.message.includes('Failed to fetch')) {
+          errorType = 'Backend Connection Error'
+          errorMessage = 'Cannot connect to AI service'
+          troubleshooting = '1. Check if backend API is running on http://localhost:8000\n2. Verify AI/Bedrock endpoints are available\n3. Check network connectivity\n4. Ensure CORS is properly configured'
+        } else if (error.status === 400) {
+          errorType = 'Invalid AI Request'
+          errorMessage = 'Your request could not be processed'
+          troubleshooting = '1. Try rephrasing your query in simpler terms\n2. Be more specific about what data you want\n3. Ensure your request relates to AWS cost data\n4. Check if your prompt is clear and unambiguous'
         } else if (error.status === 401) {
           errorType = 'Authentication Error'
-          errorMessage = 'Invalid API key. Check your authentication configuration.'
+          errorMessage = 'Invalid API credentials for AI service'
+          troubleshooting = '1. Check AWS credentials on backend\n2. Verify Bedrock access permissions\n3. Ensure API keys are correctly configured\n4. Contact your system administrator'
+        } else if (error.status === 404) {
+          errorType = 'AI Service Not Available'
+          errorMessage = 'AI endpoint not found'
+          troubleshooting = '1. Verify backend has AI/Bedrock endpoints enabled\n2. Check if Bedrock service is properly configured\n3. Ensure correct API version is being used\n4. Contact backend administrator'
         } else if (error.status === 429) {
-          errorType = 'Rate Limit'
-          errorMessage = 'Too many requests. Please wait before trying again.'
+          errorType = 'Rate Limit Exceeded'
+          errorMessage = 'Too many AI requests - temporary throttling'
+          troubleshooting = '1. Wait 30-60 seconds before trying again\n2. Reduce frequency of AI requests\n3. Consider upgrading your Bedrock quota\n4. Try again with a simpler query'
         } else if (error.status && error.status >= 500) {
-          errorType = 'Server Error'
-          errorMessage = 'Backend server error. Please try again later.'
+          errorType = 'AI Service Error'
+          errorMessage = 'Backend or Bedrock service error'
+          troubleshooting = '1. Check backend server logs for details\n2. Verify Bedrock service status\n3. Ensure sufficient AWS quota/limits\n4. Try again in a few minutes\n5. Contact system administrator if persists'
         } else {
-          errorMessage = error.message
+          errorMessage = error.message || 'Unknown AI service error'
+          troubleshooting = '1. Try a different query phrasing\n2. Check your internet connection\n3. Verify backend configuration\n4. Contact support if issue continues'
         }
       } else if (error instanceof Error) {
         if (error.message.includes('AI features are disabled')) {
-          errorType = 'Feature Disabled'
-          errorMessage = 'AI features are disabled. Enable them in configuration.'
+          errorType = 'AI Features Disabled'
+          errorMessage = 'AI query generation is not enabled'
+          troubleshooting = '1. Set NEXT_PUBLIC_ENABLE_AI=true in .env.local\n2. Restart the development server\n3. Verify environment variables are loaded\n4. Check with administrator about AI feature availability'
+        } else if (error.message.includes('fetch')) {
+          errorType = 'Network Connection Failed'
+          errorMessage = 'Cannot reach AI service'
+          troubleshooting = '1. Check your internet connection\n2. Verify backend API is accessible\n3. Ensure firewall allows connections to localhost:8000\n4. Try refreshing the page'
         } else {
           errorMessage = error.message
+          troubleshooting = '1. Check browser console for detailed errors\n2. Try rephrasing your query\n3. Verify backend is running properly\n4. Contact support for assistance'
         }
       }
       
@@ -771,7 +1077,8 @@ ${generatedSQL}`
       const fallbackQuery = `-- 🤖 AI Query Generation Failed
 -- Error Type: ${errorType}
 -- Error: ${errorMessage}
--- Prompt: "${aiPrompt}"
+-- Troubleshooting: ${troubleshooting}
+-- Original Prompt: "${aiPrompt}"
 
 -- Here's a sample query to get you started:
 SELECT 
@@ -834,6 +1141,28 @@ LIMIT 10;`
     return cleanQuery.length > maxLength ? cleanQuery.substring(0, maxLength) + '...' : cleanQuery
   }
 
+  // Test backend connectivity
+  const testBackendConnection = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/health', {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('✅ Backend connection successful:', data)
+        return true
+      } else {
+        console.error('❌ Backend health check failed:', response.status, response.statusText)
+        return false
+      }
+    } catch (error) {
+      console.error('❌ Cannot connect to backend:', error)
+      return false
+    }
+  }
+
   // Quick query templates
   const quickQueryTemplates: QueryTemplate[] = [
     {
@@ -893,11 +1222,11 @@ ORDER BY total_cost DESC;`
             <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600">
               <Database className="h-6 w-6 text-white" />
             </div>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">SQL Lab</h1>
-              <p className="text-muted-foreground">
-                Interactive SQL environment for AWS Cost and Usage Report analysis
-              </p>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">SQL Lab</h1>
+            <p className="text-muted-foreground">
+              Interactive SQL environment for AWS Cost and Usage Report analysis
+            </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -909,12 +1238,24 @@ ORDER BY total_cost DESC;`
               <Shield className="h-3 w-3 mr-1" />
               Secure Query Environment
             </Badge>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={testBackendConnection}
+              className="text-xs"
+              title="Test backend API connection"
+            >
+              Test API
+            </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Unified Sidebar */}
-          <div className="lg:col-span-1">
+        <div className="flex gap-6">
+          {/* Resizable Sidebar */}
+          <div 
+            className="flex-shrink-0 relative"
+            style={{ width: `${sidebarWidth}px` }}
+          >
             <Card className="h-fit">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -926,16 +1267,16 @@ ORDER BY total_cost DESC;`
                 {/* Data Columns Browser */}
                 <Collapsible open={columnsOpen} onOpenChange={setColumnsOpen}>
                   <CollapsibleTrigger asChild>
-                    <Button variant="ghost" className="w-full justify-between px-6 py-3 h-auto rounded-none border-b border-border/40">
-                      <div className="flex items-center gap-3">
-                        <Database className="h-4 w-4 text-blue-600" />
-                        <div className="text-left">
+                    <Button variant="ghost" className="w-full justify-between px-4 py-3 h-auto rounded-none border-b border-border/40">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <Database className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                        <div className="text-left min-w-0 flex-1">
                           <div className="font-medium text-sm">AWS CUR 2.0 Columns</div>
                           <div className="text-xs text-muted-foreground">Browse and select columns</div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="text-xs">
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge variant="secondary" className="text-xs px-2 py-1">
                           {databaseSchema?.tables[0]?.columns.length || 125}
                         </Badge>
                         {columnsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -947,76 +1288,154 @@ ORDER BY total_cost DESC;`
                     <div className="relative mb-4">
                       <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                       <input
-                        placeholder="Search columns..."
+                        placeholder="Search columns... (e.g., 'bill', 'line_item', 'cost')"
                         value={columnSearch}
                         onChange={(e) => setColumnSearch(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-background"
+                        className="w-full pl-8 pr-10 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-background"
                       />
+                      {columnSearch && (
+                        <button
+                          onClick={() => setColumnSearch('')}
+                          className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground hover:text-foreground transition-colors"
+                          title="Clear search"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                     
-                    {/* Column Groups */}
-                    <div className="space-y-2 max-h-80 overflow-y-auto">
-                      {columnGroups.map((group) => (
-                        <div key={group.name} className="border rounded-lg overflow-hidden bg-background">
-                          <div 
-                            className="flex items-center justify-between cursor-pointer hover:bg-muted/50 p-3 bg-muted/20"
-                            onClick={() => toggleColumnGroup(group.name)}
-                          >
-                            <div className="flex items-center gap-2">
-                              {expandedGroups.has(group.name) ? 
-                                <ChevronDown className="h-3 w-3" /> : 
-                                <ChevronRight className="h-3 w-3" />
-                              }
-                              <group.icon className={`h-3 w-3 ${group.color}`} />
-                              <span className={`font-medium text-xs ${group.color}`}>{group.name}</span>
-                            </div>
-                            <Badge variant="outline" className="text-xs">
-                              {group.columns.length}
-                            </Badge>
-                          </div>
-                          
-                          {expandedGroups.has(group.name) && (
-                            <div className="p-2 space-y-1 bg-background max-h-48 overflow-y-auto">
-                              {group.columns
-                                .filter(colName => {
-                                  if (!columnSearch) return true
-                                  return colName.toLowerCase().includes(columnSearch.toLowerCase())
-                                })
-                                .map((columnName) => {
-                                  const column = databaseSchema?.tables[0]?.columns.find(c => c.name === columnName)
-                                  const isSelected = selectedColumns.has(columnName)
-                                  
-                                  return (
-                                    <div 
-                                      key={columnName}
-                                      className={`p-2 rounded cursor-pointer group border transition-colors ${
-                                        isSelected 
-                                          ? 'bg-blue-100 border-blue-400 ring-1 ring-blue-300' 
-                                          : 'hover:bg-blue-50 hover:border-blue-200 border-gray-200'
-                                      }`}
-                                      onClick={() => insertColumnIntoQuery(columnName)}
-                                      title={columnName}
-                                    >
-                                      <div className="flex items-center justify-between">
-                                        <span className={`font-mono text-xs font-medium ${
-                                          isSelected ? 'text-blue-700' : 'text-blue-900'
-                                        }`}>{columnName}</span>
-                                        <Badge 
-                                          variant={isSelected ? "default" : "secondary"} 
-                                          className={`text-xs h-4 ${
-                                            isSelected ? 'opacity-100 bg-blue-600' : 'opacity-0 group-hover:opacity-100'
-                                          }`}
-                                        >
-                                          {column?.type}
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                  )
-                                })}
-                            </div>
-                          )}
+                    {/* Search Results Summary */}
+                    {columnSearch.trim() && (
+                      <div className="mb-3 px-1">
+                        <div className="text-xs text-muted-foreground">
+                          {columnGroups.filter(group => 
+                            group.columns.some(colName => 
+                              colName.toLowerCase().includes(columnSearch.toLowerCase())
+                            )
+                          ).length} groups with {
+                            columnGroups.reduce((total, group) => {
+                              return total + group.columns.filter(colName => 
+                                colName.toLowerCase().includes(columnSearch.toLowerCase())
+                              ).length
+                            }, 0)
+                          } matching columns for "{columnSearch}"
                         </div>
-                      ))}
+                      </div>
+                    )}
+                    
+                    {/* Column Groups */}
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {columnGroups
+                        .filter(group => {
+                          // Filter groups that have matching columns when search is active
+                          if (!columnSearch.trim()) return true
+                          return group.columns.some(colName => 
+                            colName.toLowerCase().includes(columnSearch.toLowerCase())
+                          )
+                        })
+                        .map((group) => {
+                          // Count matching columns for this group
+                          const matchingColumns = group.columns.filter(colName => {
+                            if (!columnSearch.trim()) return true
+                            return colName.toLowerCase().includes(columnSearch.toLowerCase())
+                          })
+                          
+                          return (
+                            <div key={group.name} className="border rounded-lg overflow-hidden bg-background">
+                              <div 
+                                className="flex items-center justify-between cursor-pointer hover:bg-muted/50 p-3 bg-muted/20"
+                                onClick={() => toggleColumnGroup(group.name)}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {expandedGroups.has(group.name) ? 
+                                    <ChevronDown className="h-3 w-3" /> : 
+                                    <ChevronRight className="h-3 w-3" />
+                                  }
+                                  <group.icon className={`h-3 w-3 ${group.color}`} />
+                                  <span className={`font-medium text-xs ${group.color}`}>{group.name}</span>
+                                  {columnSearch.trim() && matchingColumns.length !== group.columns.length && (
+                                    <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-300">
+                                      {matchingColumns.length} matches
+                                    </Badge>
+                                  )}
+                                </div>
+                                <Badge variant="outline" className="text-xs">
+                                  {columnSearch.trim() ? matchingColumns.length : group.columns.length}
+                                </Badge>
+                              </div>
+                              
+                              {expandedGroups.has(group.name) && (
+                                <div className="p-2 space-y-1 bg-background max-h-80 overflow-y-auto">
+                                  {matchingColumns.map((columnName) => {
+                                    const column = databaseSchema?.tables[0]?.columns.find(c => c.name === columnName)
+                                    const isSelected = selectedColumns.has(columnName)
+                                    
+                                    // Highlight search matches
+                                    const highlightedName = columnSearch.trim() 
+                                      ? columnName.replace(
+                                          new RegExp(`(${columnSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'),
+                                          '<mark class="bg-yellow-200 text-yellow-900 rounded px-1">$1</mark>'
+                                        )
+                                      : columnName
+                                    
+                                    return (
+                                      <div 
+                                        key={columnName}
+                                        className={`p-2 rounded cursor-pointer group border transition-colors ${
+                                          isSelected 
+                                            ? 'bg-blue-100 border-blue-400 ring-1 ring-blue-300' 
+                                            : 'hover:bg-blue-50 hover:border-blue-200 border-gray-200'
+                                        }`}
+                                        onClick={() => toggleColumnInQuery(columnName)}
+                                        title={`${isSelected ? 'Remove' : 'Add'} ${columnName} ${isSelected ? 'from' : 'to'} query`}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                                            {isSelected && (
+                                              <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0" title="Selected in query" />
+                                            )}
+                                            <span 
+                                              className={`font-mono text-xs font-medium truncate ${
+                                                isSelected ? 'text-blue-700' : 'text-blue-900'
+                                              }`}
+                                              dangerouslySetInnerHTML={{ __html: highlightedName }}
+                                            />
+                                          </div>
+                                          <Badge 
+                                            variant={isSelected ? "default" : "secondary"} 
+                                            className={`text-xs h-4 flex-shrink-0 ${
+                                              isSelected ? 'opacity-100 bg-blue-600' : 'opacity-0 group-hover:opacity-100'
+                                            }`}
+                                          >
+                                            {column?.type}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                  {matchingColumns.length === 0 && columnSearch.trim() && (
+                                    <div className="text-xs text-muted-foreground text-center py-4">
+                                      No columns match "{columnSearch}" in this group
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      
+                      {/* No results message when search returns no groups */}
+                      {columnSearch.trim() && columnGroups.filter(group => 
+                        group.columns.some(colName => 
+                          colName.toLowerCase().includes(columnSearch.toLowerCase())
+                        )
+                      ).length === 0 && (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">No columns found matching "{columnSearch}"</p>
+                          <p className="text-xs mt-1">Try a different search term or clear the search</p>
+                        </div>
+                      )}
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
@@ -1024,15 +1443,17 @@ ORDER BY total_cost DESC;`
                 {/* AI Assistant */}
                 <Collapsible open={aiOpen} onOpenChange={setAiOpen}>
                   <CollapsibleTrigger asChild>
-                    <Button variant="ghost" className="w-full justify-between px-6 py-3 h-auto rounded-none border-b border-border/40">
-                      <div className="flex items-center gap-3">
-                        <Brain className="h-4 w-4 text-purple-600" />
-                        <div className="text-left">
+                    <Button variant="ghost" className="w-full justify-between px-4 py-3 h-auto rounded-none border-b border-border/40">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <Brain className="h-4 w-4 text-purple-600 flex-shrink-0" />
+                        <div className="text-left min-w-0 flex-1">
                           <div className="font-medium text-sm">AI Assistant</div>
                           <div className="text-xs text-muted-foreground">Generate queries with AI</div>
                         </div>
                       </div>
-                      {aiOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <div className="flex-shrink-0">
+                        {aiOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </div>
                     </Button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="px-6 py-4 border-b border-border/40 space-y-3">
@@ -1069,21 +1490,28 @@ ORDER BY total_cost DESC;`
                     </Button>
 
                     {aiGeneratedQuery && (
-                      <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
+                      <div className="space-y-3 p-4 bg-muted/50 rounded-lg border">
                         <div className="flex items-center justify-between">
-                          <Label className="text-xs font-medium text-green-700">Generated Query:</Label>
+                          <Label className="text-sm font-semibold text-green-700">Generated Query:</Label>
                           <Button 
                             onClick={useAIQuery} 
                             size="sm" 
-                            className="h-6 text-xs px-2"
+                            className="h-7 text-xs px-3"
                           >
                             <ArrowRight className="h-3 w-3 mr-1" />
                             Use Query
                           </Button>
                         </div>
-                        <pre className="text-xs bg-background p-2 rounded border font-mono whitespace-pre-wrap max-h-32 overflow-y-auto">
-                          {aiGeneratedQuery}
-                        </pre>
+                        <div className="bg-background rounded-lg border border-green-200">
+                          <pre className="text-xs font-mono whitespace-pre-wrap p-4 max-h-48 overflow-y-auto leading-relaxed">
+                            {aiGeneratedQuery}
+                          </pre>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>💡 Review the generated query before execution</span>
+                          <span>•</span>
+                          <span>Click "Use Query" to insert into editor</span>
+                        </div>
                       </div>
                     )}
                   </CollapsibleContent>
@@ -1092,15 +1520,17 @@ ORDER BY total_cost DESC;`
                 {/* Quick Templates */}
                 <Collapsible open={templatesOpen} onOpenChange={setTemplatesOpen}>
                   <CollapsibleTrigger asChild>
-                    <Button variant="ghost" className="w-full justify-between px-6 py-3 h-auto rounded-none border-b border-border/40">
-                      <div className="flex items-center gap-3">
-                        <BookOpen className="h-4 w-4 text-green-600" />
-                        <div className="text-left">
+                    <Button variant="ghost" className="w-full justify-between px-4 py-3 h-auto rounded-none border-b border-border/40">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <BookOpen className="h-4 w-4 text-green-600 flex-shrink-0" />
+                        <div className="text-left min-w-0 flex-1">
                           <div className="font-medium text-sm">Quick Templates</div>
                           <div className="text-xs text-muted-foreground">Ready-to-use query templates</div>
                         </div>
                       </div>
-                      {templatesOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <div className="flex-shrink-0">
+                        {templatesOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </div>
                     </Button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="px-6 py-4 border-b border-border/40">
@@ -1131,27 +1561,36 @@ ORDER BY total_cost DESC;`
                 {/* Query History */}
                 <Collapsible open={historyOpen} onOpenChange={setHistoryOpen}>
                   <CollapsibleTrigger asChild>
-                    <Button variant="ghost" className="w-full justify-between px-6 py-3 h-auto rounded-none">
-                      <div className="flex items-center gap-3">
-                        <Clock className="h-4 w-4 text-orange-600" />
-                        <div className="text-left">
+                    <Button variant="ghost" className="w-full justify-between px-4 py-3 h-auto rounded-none">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <Clock className="h-4 w-4 text-orange-600 flex-shrink-0" />
+                        <div className="text-left min-w-0 flex-1">
                           <div className="font-medium text-sm">Query History</div>
                           <div className="text-xs text-muted-foreground">Recent executed queries</div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         {queryHistory.length > 0 && (
-                          <div 
+                          <div
                             onClick={(e) => {
                               e.stopPropagation()
                               clearAllHistory()
                             }}
                             className="h-6 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded cursor-pointer transition-colors flex items-center"
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                clearAllHistory()
+                              }
+                            }}
                           >
                             Clear All
                           </div>
                         )}
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-xs px-2 py-1">
                           {queryHistory.length}
                         </Badge>
                         {historyOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -1219,10 +1658,19 @@ ORDER BY total_cost DESC;`
                 </Collapsible>
               </CardContent>
             </Card>
+            
+            {/* Resize Handle */}
+            <div
+              className={`absolute top-0 right-0 w-1 h-full cursor-col-resize bg-border hover:bg-border/70 transition-colors ${
+                isResizing ? 'bg-blue-500' : ''
+              }`}
+              onMouseDown={handleResizeStart}
+              title="Drag to resize sidebar"
+            />
           </div>
 
           {/* Main Content - Editor and Results */}
-          <div className="lg:col-span-3 space-y-6">
+          <div className="flex-1 space-y-6 min-w-0">
             <SqlQueryEditor
               query={currentQuery}
               onQueryChange={setCurrentQuery}

@@ -89,13 +89,14 @@ export default function Dashboard() {
 
   return (
     <DashboardFilterProvider>
-      <div className="flex-1 space-y-6 p-8 pt-6">
-        <div className="flex flex-col justify-between space-y-2 md:flex-row md:items-center">
+      <div className="flex-1 space-y-8 p-6 lg:p-8 pt-6 max-w-[1600px] mx-auto">
+        {/* Header Section with improved spacing */}
+        <div className="flex flex-col justify-between space-y-3 md:flex-row md:items-center md:space-y-0">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">
               {getGreeting()}, {user.name.split(' ')[0]}! 👋
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-muted-foreground mt-1 text-sm lg:text-base">
               Here's your {user.organization} cost overview for {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
             </p>
           </div>
@@ -107,90 +108,135 @@ export default function Dashboard() {
         {/* Enhanced Dashboard Filters */}
         <EnhancedDashboardFilters />
 
-        {/* KPI Cards - Now using component-based API */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* KPI Cards with improved spacing */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <KpiCard kpiId="mtd-spend" />
           <KpiCard kpiId="forecast" />
           <KpiCard kpiId="savings" />
           {user.role === 'admin' && <KpiCard kpiId="budget-utilization" />}
         </div>
 
-      {/* Section: Overview */}
-      <div className="space-y-4 pt-6">
-        <h2 className="text-2xl font-bold tracking-tight">Overview</h2>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <SpendSummaryChart />
-          <div className="space-y-4">
+      {/* Section: Inform - Cost Visibility & Awareness */}
+      <div className="space-y-5 pt-6 border-t border-border/40">
+        <div className="flex items-center gap-3">
+          <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
+          <h2 className="text-xl font-bold tracking-tight">📊 Inform - Cost Visibility</h2>
+          <span className="text-xs text-muted-foreground bg-blue-50 px-2 py-1 rounded">Real-time insights</span>
+        </div>
+        
+        {/* Primary spend overview - prominent display */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+          <div className="lg:col-span-3">
+            <SpendSummaryChart />
+          </div>
+          <div className="lg:col-span-2 space-y-4">
             <BudgetVsForecast />
-            <RegionalCostBreakdown />
+            <ForecastAccuracy />
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        
+        {/* Secondary cost breakdowns */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <DailySpendStackedBar />
+          <RegionalCostBreakdown />
           <TopAccountsWidget />
           <CostByPurchaseOption />
         </div>
-      </div>
-
-      {/* Section: Optimization & Discounts */}
-      <div className="space-y-4 pt-6">
-        <h2 className="text-2xl font-bold tracking-tight">Optimization & Discounts</h2>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <OptimizationPotential />
-          <DiscountCoverageGauges />
-          <CommitmentExpirations />
-        </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <TopGrowingServices />
-          <EbsVolumeAnalysis />
+        
+        {/* Detailed service and billing analysis */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <CostByChargeType />
           <Ec2CostBreakdown />
         </div>
       </div>
 
-      {/* Section: Governance & Health */}
-      <div className="space-y-4 pt-6">
-        <h2 className="text-2xl font-bold tracking-tight">Governance & Health</h2>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <AnomalyFeed />
-          <TopCostByTag />
-          <div className="space-y-4">
-            <UntaggedResourcesCost />
-            <ForecastAccuracy />
-          </div>
+      {/* Section: Optimize - Cost Optimization & Savings */}
+      <div className="space-y-5 pt-8 border-t border-border/40">
+        <div className="flex items-center gap-3">
+          <div className="w-1 h-6 bg-green-500 rounded-full"></div>
+          <h2 className="text-xl font-bold tracking-tight">🎯 Optimize - Cost Efficiency</h2>
+          <span className="text-xs text-muted-foreground bg-green-50 px-2 py-1 rounded">Savings opportunities</span>
         </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <DataTransferHotspots />
-          <CostByChargeType />
+        
+        {/* Primary optimization widgets - key savings opportunities */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <DiscountCoverageGauges />
+          <CommitmentExpirations />
+        </div>
+        
+        {/* Secondary optimization metrics */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <OptimizationPotential />
+          <SpotSavingsWidget />
           <AwsCreditsStatus />
         </div>
+        
+        {/* Resource-specific optimization */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <EbsVolumeAnalysis />
+          <DataTransferHotspots />
+          <UnitCostAnalysis />
+        </div>
       </div>
 
-      {/* Section: BI & Insights */}
-      <div className="space-y-4 pt-6">
-        <h2 className="text-2xl font-bold tracking-tight">BI & Insights</h2>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <UnitCostAnalysis />
-          <WorkloadCostEfficiency />
-          <div className="space-y-4">
-            <SpotSavingsWidget />
-            <CloudRoiWidget />
+      {/* Section: Operate - Governance & Monitoring */}
+      <div className="space-y-5 pt-8 border-t border-border/40">
+        <div className="flex items-center gap-3">
+          <div className="w-1 h-6 bg-orange-500 rounded-full"></div>
+          <h2 className="text-xl font-bold tracking-tight">⚡ Operate - Governance & Monitoring</h2>
+          <span className="text-xs text-muted-foreground bg-orange-50 px-2 py-1 rounded">Operational control</span>
+        </div>
+        
+        {/* Critical monitoring - anomalies and alerts */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+          <div className="lg:col-span-3">
+            <AnomalyFeed />
+          </div>
+          <div className="lg:col-span-2 space-y-4">
+            <UntaggedResourcesCost />
+            <TopGrowingServices />
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <StorageGrowthChart />
-          <EnvironmentCostSplit />
-        </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <AnomalyImpactWidget />
+        
+        {/* Governance and compliance metrics */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <TopCostByTag />
+          <WorkloadCostEfficiency />
           <ComputeEfficiencyMetric />
-          <MultiCloudSpend />
         </div>
       </div>
 
-      {/* Section: Detailed Breakdowns */}
-      <div className="space-y-4 pt-6">
-        <h2 className="text-2xl font-bold tracking-tight">Detailed Breakdowns</h2>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* Section: Strategic Analytics & Multi-Cloud */}
+      <div className="space-y-5 pt-8 border-t border-border/40">
+        <div className="flex items-center gap-3">
+          <div className="w-1 h-6 bg-purple-500 rounded-full"></div>
+          <h2 className="text-xl font-bold tracking-tight">📈 Strategic Analytics</h2>
+          <span className="text-xs text-muted-foreground bg-purple-50 px-2 py-1 rounded">Business intelligence</span>
+        </div>
+        
+        {/* Strategic cost insights */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <MultiCloudSpend />
+          <EnvironmentCostSplit />
+        </div>
+        
+        {/* Growth and trend analysis */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <StorageGrowthChart />
+          <CloudRoiWidget />
+          <AnomalyImpactWidget />
+        </div>
+      </div>
+
+      {/* Section: Detailed Analysis Tables */}
+      <div className="space-y-5 pt-8 border-t border-border/40 pb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-1 h-6 bg-gray-500 rounded-full"></div>
+          <h2 className="text-xl font-bold tracking-tight">📋 Detailed Analysis</h2>
+          <span className="text-xs text-muted-foreground bg-gray-50 px-2 py-1 rounded">Granular data</span>
+        </div>
+        
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           <ServiceCostsTable />
           <AccountCostsTable />
         </div>
@@ -199,3 +245,5 @@ export default function Dashboard() {
     </DashboardFilterProvider>
   )
 }
+
+

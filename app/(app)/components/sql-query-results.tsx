@@ -529,6 +529,13 @@ export default function SqlQueryResults({ results, currentQuery, onSaveResult }:
     )
   }
 
+  // Check if this is an error result (based on headers)
+  const isErrorResult = results && 
+                       results.headers.length === 3 && 
+                       results.headers[0] === 'Error Type' && 
+                       results.headers[1] === 'Details' && 
+                       results.headers[2] === 'Troubleshooting Steps'
+
   if (!results) {
     return (
       <Card>
@@ -542,6 +549,76 @@ export default function SqlQueryResults({ results, currentQuery, onSaveResult }:
               <CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No results to display</p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Special rendering for error results
+  if (isErrorResult && results.rows.length > 0) {
+    const errorRow = results.rows[0]
+    const errorType = errorRow[0] || 'Unknown Error'
+    const errorDetails = errorRow[1] || 'No details available'
+    const troubleshootingSteps = errorRow[2] || 'No troubleshooting steps available'
+
+    return (
+      <Card className="border-red-200 bg-red-50/50">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-red-100">
+              <X className="h-5 w-5 text-red-600" />
+            </div>
+            <div>
+              <CardTitle className="text-lg text-red-800">Query Execution Failed</CardTitle>
+              <CardDescription className="text-red-600">
+                Your SQL query encountered an error and could not be executed
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Error Type */}
+          <div className="p-4 bg-white border border-red-200 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge variant="destructive" className="text-xs">
+                ERROR
+              </Badge>
+              <span className="font-semibold text-red-800">{errorType}</span>
+            </div>
+          </div>
+
+          {/* Error Details */}
+          <div className="p-4 bg-white border border-red-200 rounded-lg">
+            <Label className="text-sm font-semibold text-red-800 mb-2 block">
+              Error Details:
+            </Label>
+            <div className="font-mono text-sm bg-red-50 p-3 rounded border border-red-200 whitespace-pre-wrap">
+              {errorDetails}
+            </div>
+          </div>
+
+          {/* Troubleshooting Steps */}
+          <div className="p-4 bg-white border border-red-200 rounded-lg">
+            <Label className="text-sm font-semibold text-red-800 mb-2 block">
+              How to Fix This:
+            </Label>
+            <div className="text-sm space-y-1">
+              {troubleshootingSteps.split('\n').filter(step => step.trim()).map((step, index) => (
+                <div key={index} className="flex items-start gap-2">
+                  <span className="text-red-600 font-medium text-xs mt-0.5">{index + 1}.</span>
+                  <span className="text-red-700">{step.trim()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Execution Info */}
+          <div className="flex items-center gap-2 text-xs text-red-600">
+            <Clock className="h-3 w-3" />
+            <span>Failed after {results.executionTime.toFixed(0)}ms</span>
+            <span>•</span>
+            <span>Executed at {new Date(results.executedAt).toLocaleString()}</span>
           </div>
         </CardContent>
       </Card>

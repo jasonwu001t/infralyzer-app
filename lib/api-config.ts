@@ -141,9 +141,37 @@ export const apiRequest = async <T = any>(
         
         try {
           const errorData = await response.json()
-          errorMessage = errorData.message || errorData.detail || errorData.error || errorMessage
-        } catch {
-          // Use default message if parsing fails
+          
+          // Handle different error response structures
+          if (errorData.detail && typeof errorData.detail === 'object') {
+            // Backend returns structured error with detail object (for HTTP 400 errors)
+            // This contains: { error: string, suggestions: string[], metadata: object }
+            errorMessage = errorData.detail.error || errorData.detail.message || errorMessage
+            
+            // Preserve the full structured error for frontend processing
+            if (errorData.detail.suggestions || errorData.detail.metadata) {
+              errorMessage = JSON.stringify(errorData.detail)
+            }
+          } else if (errorData.detail && typeof errorData.detail === 'string') {
+            // Backend returns string error message in detail field
+            errorMessage = errorData.detail
+          } else if (errorData.message) {
+            // Standard message field
+            errorMessage = errorData.message
+          } else if (errorData.error) {
+            // Error field
+            errorMessage = errorData.error
+          }
+        } catch (parseError) {
+          // If JSON parsing fails, try to get response text
+          try {
+            const responseText = await response.text()
+            if (responseText) {
+              errorMessage = responseText
+            }
+          } catch {
+            // Use default message if all parsing fails
+          }
         }
 
         const apiError = new ApiError(errorMessage, response.status, endpoint, method, attempt)
