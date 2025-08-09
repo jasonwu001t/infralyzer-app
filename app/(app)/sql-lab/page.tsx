@@ -1,11 +1,9 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useAuth, useUserData } from "@/lib/hooks/use-auth"
 import { ViewerRestricted } from "@/lib/components/role-guard"
-import SqlAiAssistant from "../components/sql-ai-assistant"
-import SqlTemplates from "../components/sql-templates"
-import SqlQueryHistory from "../components/sql-query-history"
+import { apiUtils, ApiError } from "@/lib/api-config"
 import SqlQueryEditor from "../components/sql-query-editor"
 import SqlQueryResults from "../components/sql-query-results"
 import type { QueryTemplate, QueryResult } from "../components/sql-query-editor"
@@ -65,7 +63,7 @@ export default function SqlLabPage() {
   const [aiOpen, setAiOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [columnsOpen, setColumnsOpen] = useState(true)
+  const [columnsOpen, setColumnsOpen] = useState(false)
   
   // AI Assistant state
   const [aiPrompt, setAiPrompt] = useState('')
@@ -78,6 +76,10 @@ export default function SqlLabPage() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['Line Item']))
   const [databaseSchema, setDatabaseSchema] = useState<DatabaseSchema | null>(null)
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set())
+  
+  // Ref to prevent duplicate API calls
+  const executionRef = useRef<boolean>(false)
+  const executionCountRef = useRef<number>(0)
 
   // Load user's saved queries and history
   useEffect(() => {
@@ -428,28 +430,24 @@ export default function SqlLabPage() {
   }
 
   const executeQuery = async () => {
-    if (!currentQuery.trim() || isExecuting) return
+    executionCountRef.current += 1
+    const executionId = executionCountRef.current
+    console.log(`🔍 executeQuery called #${executionId}, isExecuting:`, isExecuting, 'executionRef:', executionRef.current)
+    
+    if (!currentQuery.trim() || isExecuting || executionRef.current) {
+      console.log(`🛑 Execution #${executionId} blocked - already running or empty query`)
+      return
+    }
 
+    console.log(`✅ Starting query execution #${executionId}`)
+    // Set both state and ref to prevent duplicate calls
     setIsExecuting(true)
+    executionRef.current = true
+
     const startTime = Date.now()
     
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/finops/query', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: currentQuery,
-          engine: 'duckdb'
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`)
-      }
-
-      const data = await response.json()
+      const data = await apiUtils.executeQuery(currentQuery, 'duckdb')
       const executionTime = Date.now() - startTime
       
       // Debug logging to understand API response structure
@@ -555,10 +553,21 @@ export default function SqlLabPage() {
       setQueryHistory(prev => [currentQuery, ...prev.slice(0, 19)])
       addQueryHistory(historyItem)
 
-      // Show error results
+      // Enhanced error message based on error type
+      let errorMessage = 'Unknown error occurred'
+      let errorDetails = ''
+      
+      if (error instanceof ApiError) {
+        errorMessage = error.message
+        errorDetails = `Status: ${error.status || 'N/A'} | Endpoint: ${error.endpoint} | Retries: ${error.retryAttempts}`
+      } else if (error instanceof Error) {
+        errorMessage = error.message
+      }
+
+      // Show error results with enhanced information
       const errorResults: QueryResult = {
-        headers: ['Error'],
-        rows: [[error instanceof Error ? error.message : 'Unknown error occurred']],
+        headers: ['Error', 'Details'],
+        rows: [[errorMessage, errorDetails]],
         executionTime: Date.now() - startTime,
         rowCount: 0,
         executedAt: new Date().toISOString()
@@ -567,6 +576,7 @@ export default function SqlLabPage() {
       setQueryResults(errorResults)
     } finally {
       setIsExecuting(false)
+      executionRef.current = false
     }
   }
 
@@ -693,30 +703,7 @@ export default function SqlLabPage() {
     setIsGeneratingAI(true)
     
     try {
-      const response = await fetch('http://localhost:8000/api/v1/finops/bedrock/generate-query', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_query: aiPrompt,
-          model_config: {
-            model_id: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-            max_tokens: 4096,
-            temperature: 0.1,
-            top_p: 0.9,
-            top_k: 250
-          },
-          include_examples: true,
-          target_table: 'CUR'
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`)
-      }
-
-      const data = await response.json()
+      const data = await apiUtils.generateAIQuery(aiPrompt)
       
       // Extract the SQL query from the structured response
       let generatedSQL = ''
@@ -751,11 +738,42 @@ ${generatedSQL}`
     } catch (error) {
       console.error('AI query generation failed:', error)
       
-      // Fallback to a simple template
-      const fallbackQuery = `-- 🤖 AI Generated SQL Query (Fallback)
+      // Enhanced error handling for AI generation
+      let errorType = 'API Error'
+      let errorMessage = 'Failed to generate query'
+      
+      if (error instanceof ApiError) {
+        if (error.status === 0) {
+          errorType = 'Network Error'
+          errorMessage = 'Cannot connect to AI service. Check backend URL configuration.'
+        } else if (error.status === 401) {
+          errorType = 'Authentication Error'
+          errorMessage = 'Invalid API key. Check your authentication configuration.'
+        } else if (error.status === 429) {
+          errorType = 'Rate Limit'
+          errorMessage = 'Too many requests. Please wait before trying again.'
+        } else if (error.status && error.status >= 500) {
+          errorType = 'Server Error'
+          errorMessage = 'Backend server error. Please try again later.'
+        } else {
+          errorMessage = error.message
+        }
+      } else if (error instanceof Error) {
+        if (error.message.includes('AI features are disabled')) {
+          errorType = 'Feature Disabled'
+          errorMessage = 'AI features are disabled. Enable them in configuration.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
+      // Provide helpful fallback with error information
+      const fallbackQuery = `-- 🤖 AI Query Generation Failed
+-- Error Type: ${errorType}
+-- Error: ${errorMessage}
 -- Prompt: "${aiPrompt}"
--- Note: Using template due to API unavailability
 
+-- Here's a sample query to get you started:
 SELECT 
     product_servicecode AS service_name,
     SUM(line_item_unblended_cost) AS total_cost,

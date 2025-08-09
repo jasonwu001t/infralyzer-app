@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { withApiLogging } from '@/lib/api-logger'
 
 // Mock data for demonstration - In production, this would connect to your Python backend
 const mockInstanceData = [
@@ -124,7 +125,7 @@ const mockInstanceData = [
   }
 ]
 
-export async function GET(request: NextRequest) {
+export const GET = withApiLogging(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url)
     const region = searchParams.get('region') || 'us-east-1'
@@ -178,9 +179,9 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
-export async function POST(request: NextRequest) {
+export const POST = withApiLogging(async (request: NextRequest) => {
   try {
     const body = await request.json()
     const { instance_types = [], region = 'us-east-1', operating_system = 'Linux' } = body
@@ -213,4 +214,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

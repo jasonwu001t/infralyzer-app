@@ -1,6 +1,6 @@
 "use client"
 
-import { useAuth, useUserData } from "@/lib/hooks/use-auth"
+import { useAuth } from "@/lib/hooks/use-auth"
 import { DashboardFilterProvider } from "@/lib/hooks/use-dashboard-filters"
 import KpiCard from "../components/kpi-card"
 import DashboardHeaderTools from "../components/dashboard-header-tools"
